@@ -1,0 +1,40 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Storage (user-uploaded files — never commit)
+backend/storage/original/
+backend/storage/signatures/
+backend/storage/signed/
+backend/storage/share/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.cache/
+
+# Docker volumes
+mysql_data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
