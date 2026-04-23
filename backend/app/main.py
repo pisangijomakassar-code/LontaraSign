@@ -29,7 +29,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine, checkfirst=True)
+except Exception:
+    pass  # Tables already exist
 
 app.include_router(auth_router,      prefix="/api/v1/auth",      tags=["Auth"])
 app.include_router(documents_router, prefix="/api/v1/documents", tags=["Documents"])
