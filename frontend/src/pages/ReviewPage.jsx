@@ -46,8 +46,7 @@ export default function ReviewPage() {
     try {
       const res = await triggerReview(id);
       setReview(res.data);
-      const docRes = await getDocument(id);
-      setDoc(docRes.data);
+      setDoc((prev) => ({ ...prev, status: "reviewed_by_ai" }));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
