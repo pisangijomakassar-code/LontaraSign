@@ -10,12 +10,17 @@ import { Ic } from "../design/icons";
 import { AppShell } from "../design/shell";
 import { EmptyStateIllustration } from "../design/illustrations";
 
-function StatCard({ icon, label, value, tone = "brand" }) {
+function StatCard({ icon, label, value, tone = "brand", active, onClick }) {
   const accent = {
     brand: LS.brand, ai: LS.ai, ok: LS.ok, warn: LS.warn,
   }[tone];
   return (
-    <Card pad={14}>
+    <Card pad={14} onClick={onClick} style={{
+      cursor: "pointer",
+      outline: active ? `2px solid ${accent}` : "none",
+      outlineOffset: -2,
+      transition: "outline 0.15s",
+    }}>
       <div style={{
         width: 34, height: 34, borderRadius: 9,
         background: `${accent}14`, color: accent,
@@ -55,14 +60,11 @@ function DocRow({ doc, onClick, i = 0 }) {
           fontSize: 14, fontWeight: 600, color: LS.ink,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>{doc.title}</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-          <span style={{ fontSize: 11, color: LS.mute, fontFamily: LS.fontMono }}>
-            {doc.document_code}
-          </span>
-          <span style={{ fontSize: 11, color: LS.muteSoft }}>·</span>
-          <span style={{ fontSize: 11, color: LS.mute }}>
-            {formatDate(doc.uploaded_at)}
-          </span>
+        <div style={{ fontSize: 11, color: LS.mute, fontFamily: LS.fontMono, marginTop: 3 }}>
+          {doc.document_code}
+        </div>
+        <div style={{ fontSize: 11, color: LS.mute, marginTop: 1 }}>
+          {formatDate(doc.uploaded_at)}
         </div>
       </div>
       <StatusChip status={doc.status} />
@@ -77,6 +79,7 @@ export default function DashboardPage() {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeFilter, setActiveFilter] = useState(null);
 
   useEffect(() => {
     if (!isAuthenticated) { navigate("/login"); return; }
@@ -121,6 +124,19 @@ export default function DashboardPage() {
 
   const greeting = greetByTime();
 
+  const filterMap = {
+    total: null,
+    signed: ["signed"],
+    pending: ["pending_sign", "approved"],
+    reviewing: ["draft_uploaded", "reviewed_by_ai", "needs_revision"],
+  };
+
+  const visibleDocs = activeFilter
+    ? docs.filter((d) => filterMap[activeFilter]?.includes(d.status))
+    : docs;
+
+  const toggleFilter = (key) => setActiveFilter((prev) => (prev === key ? null : key));
+
   return (
     <AppShell
       title={
@@ -142,10 +158,10 @@ export default function DashboardPage() {
         display: "grid", gridTemplateColumns: "repeat(2, 1fr)",
         gap: 12, marginBottom: 24,
       }}>
-        <div style={{ "--i": 0 }}><StatCard icon="doc" label="Total Dokumen" value={stats.total} tone="brand" /></div>
-        <div style={{ "--i": 1 }}><StatCard icon="checkCircle" label="Ditandatangani" value={stats.signed} tone="ok" /></div>
-        <div style={{ "--i": 2 }}><StatCard icon="pen" label="Menunggu TTD" value={stats.pending} tone="brand" /></div>
-        <div style={{ "--i": 3 }}><StatCard icon="sparkle" label="Dalam Review" value={stats.reviewing} tone="ai" /></div>
+        <div style={{ "--i": 0 }}><StatCard icon="doc" label="Total Dokumen" value={stats.total} tone="brand" active={activeFilter === "total"} onClick={() => toggleFilter("total")} /></div>
+        <div style={{ "--i": 1 }}><StatCard icon="checkCircle" label="Ditandatangani" value={stats.signed} tone="ok" active={activeFilter === "signed"} onClick={() => toggleFilter("signed")} /></div>
+        <div style={{ "--i": 2 }}><StatCard icon="pen" label="Menunggu TTD" value={stats.pending} tone="brand" active={activeFilter === "pending"} onClick={() => toggleFilter("pending")} /></div>
+        <div style={{ "--i": 3 }}><StatCard icon="sparkle" label="Dalam Review" value={stats.reviewing} tone="ai" active={activeFilter === "reviewing"} onClick={() => toggleFilter("reviewing")} /></div>
       </div>
 
       {/* Document list */}
@@ -157,7 +173,7 @@ export default function DashboardPage() {
                      letterSpacing: 0.3, textTransform: "uppercase", margin: 0 }}>
           Dokumen Saya
         </h2>
-        <div style={{ fontSize: 12, color: LS.mute }}>{docs.length} dokumen</div>
+        <div style={{ fontSize: 12, color: LS.mute }}>{visibleDocs.length} dokumen{activeFilter ? " (difilter)" : ""}</div>
       </div>
 
       {error && (
@@ -193,7 +209,7 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <div className="ls-stagger" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {docs.map((doc, i) => (
+          {visibleDocs.map((doc, i) => (
             <div key={doc.id} style={{ "--i": i }}>
               <DocRow doc={doc} onClick={() => handleDocClick(doc)} i={i} />
             </div>
