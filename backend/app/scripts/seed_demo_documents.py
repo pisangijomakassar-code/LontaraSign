@@ -20,10 +20,13 @@ from app.models.document import Document
 from app.models.user import User
 from app.utils.helpers import generate_document_code
 
-import app.models.review    # noqa
-import app.models.signature # noqa
-import app.models.share     # noqa
-import app.models.log       # noqa
+import app.models.organization     # noqa
+import app.models.review           # noqa
+import app.models.signature        # noqa
+import app.models.share            # noqa
+import app.models.log              # noqa
+import app.models.saved_signature  # noqa
+import app.models.user_token       # noqa
 
 
 def _create_demo_pdf(path: str, title: str) -> None:
