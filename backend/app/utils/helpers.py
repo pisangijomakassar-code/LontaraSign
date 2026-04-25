@@ -3,17 +3,15 @@ import re
 import secrets
 from datetime import datetime
 
-from passlib.context import CryptContext
-
-_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt as _bcrypt
 
 
 def hash_password(password: str) -> str:
-    return _pwd_ctx.hash(password)
+    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_ctx.verify(plain, hashed)
+    return _bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def generate_document_code() -> str:

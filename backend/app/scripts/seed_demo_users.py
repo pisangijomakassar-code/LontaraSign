@@ -12,11 +12,14 @@ from app.core.database import SessionLocal, engine, Base
 from app.models.user import User
 from app.utils.helpers import hash_password
 
-import app.models.document  # noqa — ensure all tables exist
-import app.models.review    # noqa
-import app.models.signature # noqa
-import app.models.share     # noqa
-import app.models.log       # noqa
+import app.models.organization     # noqa — ensure all tables exist
+import app.models.document         # noqa
+import app.models.review           # noqa
+import app.models.signature        # noqa
+import app.models.share            # noqa
+import app.models.log              # noqa
+import app.models.saved_signature  # noqa
+import app.models.user_token       # noqa
 
 DEMO_PASSWORD = "password123"
 
