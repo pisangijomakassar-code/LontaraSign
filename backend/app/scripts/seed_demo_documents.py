@@ -15,18 +15,22 @@ import fitz
 from sqlalchemy import select
 
 from app.core.config import ORIGINAL_DIR
-from app.core.database import SessionLocal
-from app.models.document import Document
-from app.models.user import User
-from app.utils.helpers import generate_document_code
+from app.core.database import SessionLocal, Base, engine
 
+# Import ALL models before anything else so FK refs resolve
 import app.models.organization     # noqa
+import app.models.user             # noqa
+import app.models.document         # noqa
 import app.models.review           # noqa
 import app.models.signature        # noqa
 import app.models.share            # noqa
 import app.models.log              # noqa
 import app.models.saved_signature  # noqa
 import app.models.user_token       # noqa
+
+from app.models.document import Document
+from app.models.user import User
+from app.utils.helpers import generate_document_code
 
 
 def _create_demo_pdf(path: str, title: str) -> None:
@@ -55,6 +59,7 @@ def _create_demo_pdf(path: str, title: str) -> None:
 
 
 def seed():
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         nadia = db.scalar(select(User).where(User.email == "nadia@lontarasign.local"))

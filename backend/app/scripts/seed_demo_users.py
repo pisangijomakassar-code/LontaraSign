@@ -9,10 +9,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from sqlalchemy import select
 from app.core.database import SessionLocal, engine, Base
-from app.models.user import User
-from app.utils.helpers import hash_password
 
-import app.models.organization     # noqa — ensure all tables exist
+# Import ALL models first so FK refs resolve before create_all
+import app.models.organization     # noqa
+import app.models.user             # noqa
 import app.models.document         # noqa
 import app.models.review           # noqa
 import app.models.signature        # noqa
@@ -20,6 +20,9 @@ import app.models.share            # noqa
 import app.models.log              # noqa
 import app.models.saved_signature  # noqa
 import app.models.user_token       # noqa
+
+from app.models.user import User
+from app.utils.helpers import hash_password
 
 DEMO_PASSWORD = "password123"
 
