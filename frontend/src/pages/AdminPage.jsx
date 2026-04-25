@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
+import { getMe } from "../features/auth/authApi";
 import {
   adminStats, adminListDocuments, adminGetTimeline,
   adminListUsers, adminPatchUser,
@@ -328,7 +329,7 @@ function TimelineModal({ doc, onClose }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, setUser } = useAuthStore();
   const [tab, setTab] = useState("docs");
   const [stats, setStats] = useState(null);
   const [timelineDoc, setTimelineDoc] = useState(null);
@@ -337,7 +338,18 @@ export default function AdminPage() {
   if (user && user.role !== "admin") { navigate("/"); return null; }
 
   useEffect(() => {
-    adminStats().then((res) => setStats(res.data)).catch(() => {});
+    (async () => {
+      try {
+        if (!user) {
+          const meRes = await getMe();
+          setUser(meRes.data);
+          if (meRes.data?.role !== "admin") { navigate("/"); return; }
+        }
+        const res = await adminStats();
+        setStats(res.data);
+      } catch {}
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -348,10 +360,7 @@ export default function AdminPage() {
       subtitle={`Pantau semua dokumen dan pengguna dalam organisasi${user?.organization ? ` ${user.organization.name}` : ""}.`}
     >
       {/* Stats */}
-      <div style={{
-        display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
-        gap: 10, marginBottom: 24,
-      }}>
+      <div className="admin-stats-grid" style={{ gap: 10, marginBottom: 24 }}>
         <StatCard icon="doc" label="Total Dok" value={stats?.total_documents} tone="brand" />
         <StatCard icon="checkCircle" label="Ditandatangani" value={stats?.signed} tone="ok" />
         <StatCard icon="sparkle" label="Dalam Review" value={stats?.in_review} tone="ai" />
@@ -366,6 +375,18 @@ export default function AdminPage() {
       {tab === "users" && <UsersTab currentUserId={user?.id} />}
 
       <TimelineModal doc={timelineDoc} onClose={() => setTimelineDoc(null)} />
+
+      <style>{`
+        .admin-stats-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+        }
+        @media (max-width: 959px) {
+          .admin-stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+      `}</style>
     </AppShell>
   );
 }
