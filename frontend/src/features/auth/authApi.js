@@ -8,3 +8,6 @@ export const login = (payload) =>
   });
 
 export const getMe = () => apiRequest("/auth/me");
+
+export const updateMe = (payload) =>
+  apiRequest("/auth/me", { method: "PATCH", body: JSON.stringify(payload) });

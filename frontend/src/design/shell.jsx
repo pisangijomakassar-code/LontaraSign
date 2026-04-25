@@ -20,15 +20,13 @@ export function AppShell({ children, title, subtitle, headerRight }) {
     ...(user?.role === "admin" ? [{ label: "Admin", to: "/admin", icon: "shield" }] : []),
   ];
 
-  // Mobile bottom nav — 5 tabs (dashboard, upload, review-shortcut, admin?/profile, logout)
   const mobileNavItems = [
     { k: "dashboard", label: "Beranda", icon: "dashboard", to: "/" },
     { k: "upload", label: "Unggah", icon: "upload", to: "/upload" },
-    { k: "review", label: "Review", icon: "sparkle", to: "/" }, // shortcut → dashboard for now
     ...(user?.role === "admin"
       ? [{ k: "admin", label: "Admin", icon: "shield", to: "/admin" }]
       : [{ k: "docs", label: "Dokumen", icon: "doc", to: "/" }]),
-    { k: "profile", label: "Saya", icon: "user", to: "/", onClick: onLogout },
+    { k: "profile", label: "Saya", icon: "user", to: "/profile" },
   ];
 
   const org = user?.organization;
