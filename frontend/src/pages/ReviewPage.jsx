@@ -26,12 +26,25 @@ const getSev = (item) => {
 function useCopy() {
   const [copied, setCopied] = useState(false);
   const copy = (text) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    });
+    const done = () => { setCopied(true); setTimeout(() => setCopied(false), 1800); };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => fallback(text, done));
+    } else {
+      fallback(text, done);
+    }
   };
   return [copied, copy];
+}
+
+function fallback(text, done) {
+  const el = document.createElement("textarea");
+  el.value = text;
+  el.style.cssText = "position:fixed;opacity:0;top:0;left:0";
+  document.body.appendChild(el);
+  el.focus();
+  el.select();
+  try { document.execCommand("copy"); done(); } catch (_) {}
+  document.body.removeChild(el);
 }
 
 function FindingCard({ f, i, expanded, resolved, active, onToggle, onResolve }) {
