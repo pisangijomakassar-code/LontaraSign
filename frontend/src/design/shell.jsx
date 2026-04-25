@@ -34,7 +34,7 @@ export function AppShell({ children, title, subtitle, headerRight }) {
   const org = user?.organization;
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", background: LS.bg, fontFamily: LS.font }}>
+    <div style={{ minHeight: "100vh", display: "flex", background: LS.bg, fontFamily: LS.font, overflowX: "hidden" }}>
       {/* Sidebar (desktop) */}
       <aside className="ls-sidebar" style={{
         width: 248, background: LS.surface, borderRight: `1px solid ${LS.border}`,
@@ -133,25 +133,25 @@ export function AppShell({ children, title, subtitle, headerRight }) {
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         {/* Mobile topbar */}
         <header className="ls-mobile-topbar" style={{
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "14px 16px", background: LS.surface,
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "12px 14px", background: LS.surface,
           borderBottom: `1px solid ${LS.border}`,
           position: "sticky", top: 0, zIndex: 10,
         }}>
-          <LontaraMark size={26} />
-          <Wordmark size={15} />
+          <LontaraMark size={24} />
+          <Wordmark size={14} />
           {org && (
             <span style={{
-              marginLeft: 4, fontSize: 11, fontWeight: 600, color: LS.mute,
-              padding: "3px 8px", background: LS.brandSoft, borderRadius: 999,
+              fontSize: 10, fontWeight: 600, color: LS.mute,
+              padding: "2px 7px", background: LS.brandSoft, borderRadius: 999,
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              maxWidth: 120,
+              maxWidth: 90, flexShrink: 1,
             }}>{org.name}</span>
           )}
-          <div style={{ flex: 1 }} />
+          <div style={{ flex: 1, minWidth: 0 }} />
           <button onClick={onLogout} title="Keluar" style={{
             background: "none", border: "none", padding: 6, cursor: "pointer",
-            color: LS.mute, display: "flex",
+            color: LS.mute, display: "flex", flexShrink: 0,
           }}>
             <Ic name="logout" size={18} />
           </button>
@@ -159,23 +159,23 @@ export function AppShell({ children, title, subtitle, headerRight }) {
 
         {/* Page header */}
         {(title || headerRight) && (
-          <div style={{
-            padding: "24px 28px 18px", borderBottom: `1px solid ${LS.border}`,
+          <div className="ls-page-header" style={{
+            borderBottom: `1px solid ${LS.border}`,
             background: LS.surface,
-            display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap",
+            display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap",
           }}>
-            <div style={{ flex: 1, minWidth: 240 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               {title && <h1 style={{
-                fontSize: 22, fontWeight: 700, color: LS.ink, letterSpacing: -0.5,
+                fontSize: 20, fontWeight: 700, color: LS.ink, letterSpacing: -0.5,
                 margin: 0,
               }}>{title}</h1>}
-              {subtitle && <div style={{ fontSize: 13, color: LS.mute, marginTop: 4 }}>{subtitle}</div>}
+              {subtitle && <div style={{ fontSize: 13, color: LS.mute, marginTop: 4, lineHeight: 1.4 }}>{subtitle}</div>}
             </div>
             {headerRight}
           </div>
         )}
 
-        <main className="ls-page" style={{ padding: "24px 28px 96px", flex: 1 }}>
+        <main className="ls-page" style={{ flex: 1 }}>
           {children}
         </main>
 
@@ -216,6 +216,12 @@ export function AppShell({ children, title, subtitle, headerRight }) {
           .ls-sidebar { display: flex !important; }
           .ls-mobile-topbar { display: none !important; }
           .ls-mobile-bottomnav { display: none !important; }
+          .ls-page-header { padding: 24px 28px 18px !important; }
+          .ls-page { padding: 24px 28px 40px !important; }
+        }
+        @media (max-width: 959px) {
+          .ls-page-header { padding: 16px 16px 14px !important; }
+          .ls-page { padding: 16px 16px 96px !important; }
         }
       `}</style>
     </div>

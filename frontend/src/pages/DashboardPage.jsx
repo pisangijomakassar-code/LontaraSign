@@ -15,23 +15,20 @@ function StatCard({ icon, label, value, tone = "brand" }) {
     brand: LS.brand, ai: LS.ai, ok: LS.ok, warn: LS.warn,
   }[tone];
   return (
-    <Card pad={18}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 10,
-          background: `${accent}14`, color: accent,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <Ic name={icon} size={20} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, color: LS.mute, fontWeight: 600, letterSpacing: 0.3, textTransform: "uppercase" }}>
-            {label}
-          </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: LS.ink, letterSpacing: -0.3, marginTop: 2 }}>
-            {value}
-          </div>
-        </div>
+    <Card pad={14}>
+      <div style={{
+        width: 34, height: 34, borderRadius: 9,
+        background: `${accent}14`, color: accent,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        marginBottom: 10,
+      }}>
+        <Ic name={icon} size={18} />
+      </div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: LS.ink, letterSpacing: -0.5, lineHeight: 1 }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 11, color: LS.mute, fontWeight: 600, letterSpacing: 0.2, textTransform: "uppercase", marginTop: 4 }}>
+        {label}
       </div>
     </Card>
   );
@@ -142,8 +139,8 @@ export default function DashboardPage() {
     >
       {/* Stats */}
       <div className="ls-stagger" style={{
-        display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-        gap: 14, marginBottom: 24,
+        display: "grid", gridTemplateColumns: "repeat(2, 1fr)",
+        gap: 12, marginBottom: 24,
       }}>
         <div style={{ "--i": 0 }}><StatCard icon="doc" label="Total Dokumen" value={stats.total} tone="brand" /></div>
         <div style={{ "--i": 1 }}><StatCard icon="checkCircle" label="Ditandatangani" value={stats.signed} tone="ok" /></div>

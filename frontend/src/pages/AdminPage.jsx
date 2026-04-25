@@ -90,56 +90,53 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Table */}
+        {/* Doc list — card style, mobile-friendly */}
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: LS.mute, fontSize: 13 }}>
-            Memuat...
-          </div>
+          <div style={{ padding: 40, textAlign: "center", color: LS.mute, fontSize: 13 }}>Memuat...</div>
         ) : filtered.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: LS.mute, fontSize: 13 }}>
-            Tidak ada dokumen.
-          </div>
+          <div style={{ padding: 40, textAlign: "center", color: LS.mute, fontSize: 13 }}>Tidak ada dokumen.</div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: LS.font }}>
-              <thead>
-                <tr style={{ background: LS.surfaceMuted }}>
-                  {["Kode", "Judul", "Pengunggah", "Status", "Tanggal", ""].map((h) => (
-                    <th key={h} style={{
-                      textAlign: "left", padding: "10px 14px", fontSize: 10,
-                      fontWeight: 700, color: LS.mute, letterSpacing: 0.5,
-                      textTransform: "uppercase", borderBottom: `1px solid ${LS.border}`,
-                    }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((d) => (
-                  <tr key={d.id} style={{ borderBottom: `1px solid ${LS.border}` }}>
-                    <td style={{ padding: "12px 14px", fontSize: 12, fontFamily: LS.fontMono, color: LS.mute }}>
-                      {d.document_code}
-                    </td>
-                    <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: LS.ink }}>
-                      {d.title}
-                    </td>
-                    <td style={{ padding: "12px 14px", fontSize: 13, color: LS.inkSoft }}>
-                      {d.uploaded_by_name || "—"}
-                    </td>
-                    <td style={{ padding: "12px 14px" }}>
-                      <StatusChip status={d.status} />
-                    </td>
-                    <td style={{ padding: "12px 14px", fontSize: 12, color: LS.mute }}>
-                      {formatDate(d.uploaded_at)}
-                    </td>
-                    <td style={{ padding: "12px 14px" }}>
-                      <Btn variant="ghost" size="sm" icon="history" onClick={() => openTimeline(d)}>
-                        Timeline
-                      </Btn>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div>
+            {filtered.map((d) => (
+              <div key={d.id} style={{
+                padding: "14px 18px", borderBottom: `1px solid ${LS.border}`,
+                display: "flex", gap: 12, alignItems: "flex-start",
+              }}>
+                <div style={{
+                  width: 38, height: 44, borderRadius: 6, flexShrink: 0,
+                  background: LS.surfaceMuted, border: `1px solid ${LS.border}`,
+                  display: "flex", alignItems: "center", justifyContent: "center", color: LS.mute,
+                }}>
+                  <Ic name="doc" size={16} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 13, fontWeight: 600, color: LS.ink,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>{d.title}</div>
+                  <div style={{ fontSize: 11, color: LS.mute, fontFamily: LS.fontMono, marginTop: 2 }}>
+                    {d.document_code}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                    <StatusChip status={d.status} />
+                    <span style={{ fontSize: 11, color: LS.muteSoft }}>·</span>
+                    <span style={{ fontSize: 11, color: LS.mute }}>{d.uploaded_by_name || "—"}</span>
+                    <span style={{ fontSize: 11, color: LS.muteSoft }}>·</span>
+                    <span style={{ fontSize: 11, color: LS.mute }}>{formatDate(d.uploaded_at)}</span>
+                  </div>
+                </div>
+                <button onClick={() => openTimeline(d)} style={{
+                  flexShrink: 0, padding: "6px 10px", borderRadius: 8,
+                  border: `1px solid ${LS.border}`, background: "none",
+                  fontSize: 11, fontWeight: 600, color: LS.inkSoft,
+                  cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
+                  fontFamily: "inherit",
+                }}>
+                  <Ic name="history" size={13} />
+                  Log
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </Card>
