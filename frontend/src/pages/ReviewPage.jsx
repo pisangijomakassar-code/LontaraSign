@@ -23,7 +23,19 @@ const getSev = (item) => {
   return l in SEV_META ? l : "warning";
 };
 
+function useCopy() {
+  const [copied, setCopied] = useState(false);
+  const copy = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  };
+  return [copied, copy];
+}
+
 function FindingCard({ f, i, expanded, resolved, active, onToggle, onResolve }) {
+  const [copied, copy] = useCopy();
   const sev = getSev(f);
   const meta = SEV_META[sev];
   const title = typeof f === "string" ? f : (f.title || f.text || "—");
@@ -130,6 +142,18 @@ function FindingCard({ f, i, expanded, resolved, active, onToggle, onResolve }) 
               {resolved ? "Batalkan tanda" : "Tandai sudah diperbaiki"}
             </Btn>
             {cta && <Btn variant="outline" size="sm" icon="edit">{cta}</Btn>}
+            <Btn variant="ghost" size="sm" icon={copied ? "check" : "copy"}
+                 onClick={(e) => {
+                   e.stopPropagation();
+                   const lines = [
+                     `[${(SEV_META[sev]?.label || sev).toUpperCase()}] ${category ? `(${category}) ` : ""}${title}`,
+                     detail && detail !== title ? detail : "",
+                     evidence?.quote ? `Kutipan: "${evidence.quote}"${evidence.page ? ` (hal. ${evidence.page})` : ""}` : "",
+                   ].filter(Boolean).join("\n");
+                   copy(lines);
+                 }}>
+              {copied ? "Tersalin!" : "Salin"}
+            </Btn>
           </div>
         </div>
       )}
@@ -141,6 +165,7 @@ export default function ReviewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
+  const [copiedAll, copyAll] = useCopy();
 
   const [doc, setDoc] = useState(null);
   const [review, setReview] = useState(null);
@@ -358,7 +383,7 @@ export default function ReviewPage() {
                   {review.ai_summary}
                 </div>
               )}
-              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
                 {stats.critical > 0 && (
                   <div style={{ padding: "6px 12px", borderRadius: 8, background: SEV_META.critical.soft,
                                 fontSize: 12, fontWeight: 600, color: SEV_META.critical.tone }}>
@@ -380,6 +405,32 @@ export default function ReviewPage() {
                     <span style={{ marginLeft: 6, opacity: 0.85 }}>Minor</span>
                   </div>
                 )}
+                <button
+                  onClick={() => {
+                    const header = `REVIEW DOKUMEN: ${doc?.title || ""}\n${"=".repeat(50)}\n`;
+                    const summary = review?.ai_summary ? `Ringkasan:\n${review.ai_summary}\n\n` : "";
+                    const findings = items.map((f, idx) => {
+                      const sev = getSev(f);
+                      const lines = [
+                        `${idx + 1}. [${(SEV_META[sev]?.label || sev).toUpperCase()}]${f.category ? ` (${f.category})` : ""} ${f.title || f.text}`,
+                        f.text && f.text !== f.title ? `   ${f.text}` : "",
+                        f.evidence?.quote ? `   Kutipan: "${f.evidence.quote}"${f.evidence.page ? ` (hal. ${f.evidence.page})` : ""}` : "",
+                      ].filter(Boolean).join("\n");
+                      return lines;
+                    }).join("\n\n");
+                    const rec = review?.ai_recommendation ? `\nRekomendasi:\n${review.ai_recommendation}` : "";
+                    copyAll(header + summary + "Temuan:\n" + findings + rec);
+                  }}
+                  style={{
+                    marginLeft: "auto", padding: "6px 12px", borderRadius: 8,
+                    border: `1px solid ${verdictBorder}`, background: "#fff",
+                    fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    color: SEV_META[worstLevel].tone, display: "flex", alignItems: "center", gap: 5,
+                    fontFamily: "inherit",
+                  }}>
+                  <Ic name={copiedAll ? "check" : "copy"} size={13} />
+                  {copiedAll ? "Tersalin!" : "Salin Semua"}
+                </button>
               </div>
             </div>
           </div>
