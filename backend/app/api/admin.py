@@ -1,17 +1,98 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from pydantic import BaseModel
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from app.api.deps import require_admin
 from app.core.database import get_db
-from app.core.responses import success_response
+from app.core.responses import error_response, success_response
 from app.models.document import Document
 from app.models.log import DocumentLog
 from app.models.review import DocumentReview
 from app.models.signature import DocumentSignature
 from app.models.user import User
 
+
+class PatchUserRequest(BaseModel):
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
 router = APIRouter()
+
+
+@router.get("/stats")
+def admin_stats(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    doc_q = select(Document)
+    user_q = select(User)
+    if admin.organization_id:
+        doc_q = doc_q.where(Document.organization_id == admin.organization_id)
+        user_q = user_q.where(User.organization_id == admin.organization_id)
+
+    docs = db.scalars(doc_q).all()
+    users = db.scalars(user_q).all()
+
+    return success_response("Statistik admin", {
+        "total_documents": len(docs),
+        "signed": sum(1 for d in docs if d.status == "signed"),
+        "pending_sign": sum(1 for d in docs if d.status == "pending_sign"),
+        "in_review": sum(1 for d in docs if d.status in ("draft_uploaded", "reviewed_by_ai", "needs_revision")),
+        "total_users": len(users),
+        "active_users": sum(1 for u in users if u.is_active),
+    })
+
+
+@router.get("/users")
+def admin_list_users(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    q = select(User).order_by(User.created_at.asc())
+    if admin.organization_id:
+        q = q.where(User.organization_id == admin.organization_id)
+    users = db.scalars(q).all()
+    doc_counts = {}
+    for doc in db.scalars(select(Document)).all():
+        doc_counts[doc.uploaded_by] = doc_counts.get(doc.uploaded_by, 0) + 1
+
+    return success_response("Daftar user", {"items": [
+        {
+            "id": u.id,
+            "name": u.name,
+            "email": u.email,
+            "role": u.role,
+            "title": u.title,
+            "is_active": u.is_active,
+            "document_count": doc_counts.get(u.id, 0),
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        }
+        for u in users
+    ]})
+
+
+@router.patch("/users/{user_id}")
+def admin_patch_user(
+    user_id: int,
+    payload: PatchUserRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        error_response(404, "User tidak ditemukan")
+    if user.id == admin.id:
+        error_response(400, "Tidak bisa mengubah akun sendiri")
+    if payload.role is not None:
+        if payload.role not in ("user", "admin"):
+            error_response(400, "Role tidak valid")
+        user.role = payload.role
+    if payload.is_active is not None:
+        user.is_active = payload.is_active
+    db.commit()
+    return success_response("User diperbarui", {"id": user.id, "role": user.role, "is_active": user.is_active})
 
 
 @router.get("/documents")

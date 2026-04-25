@@ -36,7 +36,7 @@ DEMO_USERS = [
     {
         "name": "Arif Setiawan",
         "email": "arif@lontarasign.local",
-        "role": "signer",
+        "role": "user",
         "title": "Department Head Marketing",
     },
     {

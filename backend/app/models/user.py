@@ -15,7 +15,7 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(150))
     email: Mapped[str] = mapped_column(String(150), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(Enum("user", "signer", "admin"), default="user")
+    role: Mapped[str] = mapped_column(Enum("user", "admin"), default="user")
     title: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
