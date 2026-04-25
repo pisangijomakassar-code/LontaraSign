@@ -9,7 +9,8 @@ export function downloadBlob(blob, fileName = "document.pdf") {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  // Delay revoke so browser has time to start the download
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 export const toBase64FromCanvas = (canvas) => canvas.toDataURL("image/png");

@@ -1,8 +1,8 @@
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,7 +16,7 @@ from app.models.user import User
 from app.schemas.signature import DrawSignatureRequest, SignFinalizeRequest
 from app.services.file_service import save_base64_signature, save_signature_image_upload
 from app.services.log_service import log_action
-from app.services.pdf_service import embed_signature_to_pdf
+from app.services.pdf_service import embed_signature_to_pdf, render_page_to_png
 
 router = APIRouter()
 
@@ -83,8 +83,14 @@ def finalize_sign(
     except Exception as e:
         error_response(500, f"Gagal menempel tanda tangan ke PDF: {str(e)}")
 
+    # Normalize sign_method — DB ENUM only accepts 'draw' or 'upload'.
+    # Anything else (including legacy 'saved' from older frontend builds) maps to 'draw'.
+    method = (payload.sign_method or "").strip().lower()
+    if method not in ("draw", "upload"):
+        method = "draw"
+
     now = datetime.utcnow()
-    sig.sign_method = payload.sign_method
+    sig.sign_method = method
     sig.signed_pdf_path = output_path
     sig.signer_name_snapshot = current_user.name
     sig.signer_title_snapshot = current_user.title
@@ -97,8 +103,8 @@ def finalize_sign(
     log_action(
         db, doc_id, current_user.name, current_user.role, "signed",
         actor_id=current_user.id,
-        description=f"Dokumen ditandatangani dengan metode '{payload.sign_method}'",
-        meta={"sign_method": payload.sign_method, "page": str(payload.page), "x": x, "y": y},
+        description=f"Dokumen ditandatangani dengan metode '{method}'",
+        meta={"sign_method": method, "page": str(payload.page), "x": x, "y": y},
     )
 
     return success_response("Dokumen berhasil ditandatangani", {
@@ -107,6 +113,29 @@ def finalize_sign(
         "signed_at": now.isoformat(),
         "signer_name": current_user.name,
     })
+
+
+@router.get("/{doc_id}/page-preview")
+def get_page_preview(
+    doc_id: int,
+    page: str = Query(default="last"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    doc = _get_owned_doc(doc_id, current_user.id, db)
+    try:
+        img_bytes, page_width, page_height = render_page_to_png(doc.original_file_path, page)
+    except Exception as e:
+        error_response(500, f"Gagal merender halaman PDF: {str(e)}")
+    return Response(
+        content=img_bytes,
+        media_type="image/png",
+        headers={
+            "X-Page-Width": str(page_width),
+            "X-Page-Height": str(page_height),
+            "Cache-Control": "no-cache",
+        },
+    )
 
 
 @router.get("/{doc_id}/download-signed")
@@ -131,7 +160,16 @@ def download_signed(
     if not signed_path.exists():
         error_response(404, "File signed PDF tidak ada di storage")
 
-    filename = f"{doc.document_code}_signed.pdf"
+    # Nama file: <original_filename_tanpa_ext>_LS_signed_<nama_user>.pdf
+    import re as _re
+    orig_name = doc.original_file_name or f"{doc.document_code}.pdf"
+    stem = orig_name.rsplit(".", 1)[0] if "." in orig_name else orig_name
+    signer = sig.signer_name_snapshot or current_user.name or "signer"
+    # sanitize: spasi → underscore, buang karakter non-aman
+    def _slug(s):
+        s = _re.sub(r"\s+", "_", s.strip())
+        return _re.sub(r"[^A-Za-z0-9._-]", "", s)
+    filename = f"{_slug(stem)}_LS_signed_{_slug(signer)}.pdf"
     return FileResponse(
         path=str(signed_path),
         media_type="application/pdf",
@@ -141,9 +179,13 @@ def download_signed(
 
 
 def _get_owned_doc(doc_id: int, user_id: int, db: Session) -> Document:
+    from app.models.user import User as _U
+    user = db.scalar(select(_U).where(_U.id == user_id))
     doc = db.scalar(select(Document).where(Document.id == doc_id))
     if not doc:
         error_response(404, "Dokumen tidak ditemukan")
+    if user and user.organization_id and doc.organization_id == user.organization_id:
+        return doc
     if doc.uploaded_by != user_id:
         error_response(403, "Akses ditolak")
     return doc

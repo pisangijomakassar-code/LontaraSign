@@ -1,9 +1,10 @@
 import base64
 import re
+import uuid
 
 from fastapi import HTTPException, UploadFile
 
-from app.core.config import ORIGINAL_DIR, SIGNATURE_DIR
+from app.core.config import ORIGINAL_DIR, SIGNATURE_DIR, USER_SIGS_DIR
 from app.utils.constants import BLOCKED_FILENAME_KEYWORDS, MAX_PDF_SIZE_BYTES
 from app.utils.helpers import sanitize_filename
 
@@ -68,6 +69,35 @@ async def save_signature_image_upload(file: UploadFile, document_code: str) -> s
     ext = "png" if "png" in content_type else "jpg"
     filename = f"{document_code}_sig_upload.{ext}"
     file_path = SIGNATURE_DIR / filename
+    with open(file_path, "wb") as f:
+        f.write(content)
+    return str(file_path)
+
+
+def save_user_signature_base64(image_base64: str, user_id: int) -> str:
+    if "," in image_base64:
+        image_base64 = image_base64.split(",", 1)[1]
+    try:
+        image_bytes = base64.b64decode(image_base64)
+    except Exception:
+        raise HTTPException(status_code=400, detail={"success": False, "message": "Format base64 tidak valid", "errors": {}})
+    filename = f"user_{user_id}_{uuid.uuid4().hex[:8]}.png"
+    file_path = USER_SIGS_DIR / filename
+    with open(file_path, "wb") as f:
+        f.write(image_bytes)
+    return str(file_path)
+
+
+async def save_user_signature_upload(file: UploadFile, user_id: int) -> str:
+    content_type = file.content_type or ""
+    if not any(t in content_type for t in ("image/png", "image/jpeg", "image/jpg")):
+        raise HTTPException(status_code=400, detail={"success": False, "message": "Hanya file PNG/JPG yang diperbolehkan", "errors": {}})
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail={"success": False, "message": "Ukuran gambar melebihi 5 MB", "errors": {}})
+    ext = "png" if "png" in content_type else "jpg"
+    filename = f"user_{user_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    file_path = USER_SIGS_DIR / filename
     with open(file_path, "wb") as f:
         f.write(content)
     return str(file_path)

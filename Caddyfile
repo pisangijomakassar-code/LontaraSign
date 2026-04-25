@@ -1,0 +1,33 @@
+# Ganti your-domain.com dengan domain VPS kamu
+# Kalau belum punya domain, pakai IP: http://YOUR_VPS_IP
+your-domain.com {
+    # API backend
+    handle /api/* {
+        reverse_proxy lontarasign_backend:8000
+    }
+
+    # Health check
+    handle /health {
+        reverse_proxy lontarasign_backend:8000
+    }
+
+    # Frontend SPA
+    handle {
+        reverse_proxy lontarasign_frontend:80
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+}

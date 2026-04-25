@@ -12,29 +12,44 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.eggs/
+*.egg
 .venv/
 venv/
 env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Storage (user-uploaded files — never commit)
 backend/storage/original/
 backend/storage/signatures/
 backend/storage/signed/
 backend/storage/share/
+backend/storage/user_signatures/
 
 # Node
 node_modules/
+frontend/node_modules/
 frontend/dist/
 frontend/.cache/
+frontend/.vite/
+*.tsbuildinfo
 
-# Docker volumes
+# Docker
 mysql_data/
+*.override.yml
 
 # OS
 .DS_Store
 Thumbs.db
 
 # IDE
-.vscode/
+.vscode/settings.json
 .idea/
 *.swp
+*.swo
+
+# Logs
+*.log
+logs/

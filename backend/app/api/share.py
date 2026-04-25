@@ -78,9 +78,13 @@ def share_history(
 
 
 def _get_owned_doc(doc_id: int, user_id: int, db: Session) -> Document:
+    from app.models.user import User as _U
+    user = db.scalar(select(_U).where(_U.id == user_id))
     doc = db.scalar(select(Document).where(Document.id == doc_id))
     if not doc:
         error_response(404, "Dokumen tidak ditemukan")
+    if user and user.organization_id and doc.organization_id == user.organization_id:
+        return doc
     if doc.uploaded_by != user_id:
         error_response(403, "Akses ditolak")
     return doc

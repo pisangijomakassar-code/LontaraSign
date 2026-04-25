@@ -32,6 +32,7 @@ async def upload_document(
     doc_title = title.strip() if title and title.strip() else original_name
 
     doc = Document(
+        organization_id=current_user.organization_id,
         document_code=doc_code,
         title=doc_title,
         original_file_name=original_name,
@@ -58,11 +59,14 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    docs = db.scalars(
-        select(Document)
-        .where(Document.uploaded_by == current_user.id)
-        .order_by(Document.uploaded_at.desc())
-    ).all()
+    # Scope by organization: user sees all docs uploaded in their org
+    # (admins still scoped to org; cross-org admin is handled by a future super-admin role)
+    q = select(Document).order_by(Document.uploaded_at.desc())
+    if current_user.organization_id:
+        q = q.where(Document.organization_id == current_user.organization_id)
+    else:
+        q = q.where(Document.uploaded_by == current_user.id)
+    docs = db.scalars(q).all()
     return success_response("Daftar dokumen", {"items": [_doc_dict(d) for d in docs]})
 
 
@@ -72,7 +76,7 @@ def get_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    doc = _get_owned_doc(doc_id, current_user.id, db)
+    doc = get_org_doc(doc_id, current_user, db)
 
     review = db.scalar(select(DocumentReview).where(DocumentReview.document_id == doc_id))
     sig = db.scalar(
@@ -91,10 +95,23 @@ def get_document(
 
 
 def _get_owned_doc(doc_id: int, user_id: int, db: Session) -> Document:
+    """Backward-compat single-user check — use _get_org_doc for org-scoped access."""
     doc = db.scalar(select(Document).where(Document.id == doc_id))
     if not doc:
         error_response(404, "Dokumen tidak ditemukan")
     if doc.uploaded_by != user_id:
+        error_response(403, "Akses ditolak")
+    return doc
+
+
+def get_org_doc(doc_id: int, current_user: User, db: Session) -> Document:
+    """Org-scoped access: user can access any doc in their organization."""
+    doc = db.scalar(select(Document).where(Document.id == doc_id))
+    if not doc:
+        error_response(404, "Dokumen tidak ditemukan")
+    if current_user.organization_id and doc.organization_id != current_user.organization_id:
+        error_response(403, "Akses ditolak — dokumen tidak dalam organisasi Anda")
+    elif not current_user.organization_id and doc.uploaded_by != current_user.id:
         error_response(403, "Akses ditolak")
     return doc
 

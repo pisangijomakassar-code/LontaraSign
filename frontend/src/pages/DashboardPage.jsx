@@ -1,20 +1,89 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { listDocuments } from "../features/documents/documentsApi";
 import { getMe } from "../features/auth/authApi";
 import { useAuthStore } from "../store/authStore";
-import { STATUS_COLORS, STATUS_LABELS, formatDate, getErrorMessage } from "../lib/utils";
+import { formatDate, getErrorMessage } from "../lib/utils";
+import { LS, greetByTime } from "../design/tokens";
+import { Btn, Card, StatusChip, LontaraTag } from "../design/primitives";
+import { Ic } from "../design/icons";
+import { AppShell } from "../design/shell";
+import { EmptyStateIllustration } from "../design/illustrations";
+
+function StatCard({ icon, label, value, tone = "brand" }) {
+  const accent = {
+    brand: LS.brand, ai: LS.ai, ok: LS.ok, warn: LS.warn,
+  }[tone];
+  return (
+    <Card pad={18}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10,
+          background: `${accent}14`, color: accent,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Ic name={icon} size={20} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, color: LS.mute, fontWeight: 600, letterSpacing: 0.3, textTransform: "uppercase" }}>
+            {label}
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: LS.ink, letterSpacing: -0.3, marginTop: 2 }}>
+            {value}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function DocRow({ doc, onClick, i = 0 }) {
+  return (
+    <div onClick={onClick} className="ls-card-hover" style={{
+      background: LS.surface, border: `1px solid ${LS.border}`,
+      borderRadius: 12, padding: "14px 16px",
+      display: "flex", alignItems: "center", gap: 14,
+      animationDelay: `${i * 30}ms`,
+    }}>
+      <div style={{
+        width: 40, height: 48, borderRadius: 6,
+        background: LS.surfaceMuted, border: `1px solid ${LS.border}`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: LS.mute, flexShrink: 0,
+      }}>
+        <Ic name={doc.status === "signed" ? "docSigned" : "doc"} size={18} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 14, fontWeight: 600, color: LS.ink,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>{doc.title}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
+          <span style={{ fontSize: 11, color: LS.mute, fontFamily: LS.fontMono }}>
+            {doc.document_code}
+          </span>
+          <span style={{ fontSize: 11, color: LS.muteSoft }}>·</span>
+          <span style={{ fontSize: 11, color: LS.mute }}>
+            {formatDate(doc.uploaded_at)}
+          </span>
+        </div>
+      </div>
+      <StatusChip status={doc.status} />
+      <Ic name="chevronR" size={16} color={LS.muteSoft} />
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, logout, user, setUser } = useAuthStore();
+  const { isAuthenticated, user, setUser, logout } = useAuthStore();
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!isAuthenticated) { navigate("/login"); return; }
-    const init = async () => {
+    (async () => {
       try {
         if (!user) {
           const meRes = await getMe();
@@ -23,125 +92,117 @@ export default function DashboardPage() {
         const res = await listDocuments();
         setDocs(res.data.items);
       } catch (err) {
+        if (err?.status === 401 || err?.detail?.message) { /* ignore transient */ }
         if (err?.status === 401) { logout(); navigate("/login"); }
         else setError(getErrorMessage(err));
       } finally {
         setLoading(false);
       }
-    };
-    init();
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   const handleDocClick = (doc) => {
-    if (doc.status === "draft_uploaded" || doc.status === "needs_revision") {
-      navigate(`/documents/${doc.id}/review`);
-    } else if (doc.status === "reviewed_by_ai") {
+    if (["draft_uploaded", "needs_revision", "reviewed_by_ai"].includes(doc.status)) {
       navigate(`/documents/${doc.id}/review`);
     } else if (doc.status === "pending_sign") {
       navigate(`/documents/${doc.id}/sign`);
-    } else if (doc.status === "signed") {
+    } else if (doc.status === "signed" || doc.status === "approved") {
       navigate(`/documents/${doc.id}/result`);
+    } else {
+      navigate(`/documents/${doc.id}/review`);
     }
   };
 
+  const stats = useMemo(() => {
+    const total = docs.length;
+    const signed = docs.filter((d) => d.status === "signed").length;
+    const pending = docs.filter((d) => ["pending_sign", "approved"].includes(d.status)).length;
+    const reviewing = docs.filter((d) => ["draft_uploaded", "reviewed_by_ai", "needs_revision"].includes(d.status)).length;
+    return { total, signed, pending, reviewing };
+  }, [docs]);
+
+  const greeting = greetByTime();
+
   return (
-    <div className="min-h-screen bg-slate-100">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 px-4 py-4">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-base font-bold text-slate-900">LontaraSign</h1>
-              {user && <p className="text-xs text-slate-500">{user.name}</p>}
+    <AppShell
+      title={
+        <span style={{ display: "inline-flex", alignItems: "baseline", gap: 10 }}>
+          <span style={{ color: LS.bugisGold, fontSize: 18, fontWeight: 600 }}>{greeting.bugis},</span>
+          <span>{user?.name?.split(" ")[0] || "Tamu"}.</span>
+          <LontaraTag size={14} />
+        </span>
+      }
+      subtitle={`${greeting.indo}. Berikut ringkasan dokumen Anda hari ini.`}
+      headerRight={
+        <Btn variant="primary" icon="plus" onClick={() => navigate("/upload")}>
+          Unggah Dokumen
+        </Btn>
+      }
+    >
+      {/* Stats */}
+      <div className="ls-stagger" style={{
+        display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+        gap: 14, marginBottom: 24,
+      }}>
+        <div style={{ "--i": 0 }}><StatCard icon="doc" label="Total Dokumen" value={stats.total} tone="brand" /></div>
+        <div style={{ "--i": 1 }}><StatCard icon="checkCircle" label="Ditandatangani" value={stats.signed} tone="ok" /></div>
+        <div style={{ "--i": 2 }}><StatCard icon="pen" label="Menunggu TTD" value={stats.pending} tone="brand" /></div>
+        <div style={{ "--i": 3 }}><StatCard icon="sparkle" label="Dalam Review" value={stats.reviewing} tone="ai" /></div>
+      </div>
+
+      {/* Document list */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        marginBottom: 12,
+      }}>
+        <h2 style={{ fontSize: 14, fontWeight: 700, color: LS.inkSoft,
+                     letterSpacing: 0.3, textTransform: "uppercase", margin: 0 }}>
+          Dokumen Saya
+        </h2>
+        <div style={{ fontSize: 12, color: LS.mute }}>{docs.length} dokumen</div>
+      </div>
+
+      {error && (
+        <div style={{
+          background: LS.dangerSoft, border: `1px solid ${LS.danger}33`,
+          color: LS.danger, borderRadius: 12, padding: "10px 14px",
+          fontSize: 13, marginBottom: 14,
+        }}>{error}</div>
+      )}
+
+      {loading ? (
+        <Card pad={32}>
+          <div style={{ textAlign: "center", color: LS.mute, fontSize: 14 }}>
+            Memuat dokumen...
+          </div>
+        </Card>
+      ) : docs.length === 0 ? (
+        <Card pad={40}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <EmptyStateIllustration size={220} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: LS.ink, marginBottom: 4 }}>
+                Belum ada dokumen
+              </div>
+              <div style={{ fontSize: 13, color: LS.mute, maxWidth: 360, margin: "0 auto 16px" }}>
+                Unggah PDF untuk di-review AI, lalu tanda tangani dengan aman. Setiap dokumen akan dapat diverifikasi melalui QR publik.
+              </div>
+              <Btn variant="primary" icon="upload" onClick={() => navigate("/upload")}>
+                Unggah Dokumen Pertama
+              </Btn>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {user?.role === "admin" && (
-              <button
-                onClick={() => navigate("/admin")}
-                className="text-sm text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                Admin
-              </button>
-            )}
-            <button
-              onClick={() => { logout(); navigate("/login"); }}
-              className="text-sm text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
-            >
-              Keluar
-            </button>
-          </div>
+        </Card>
+      ) : (
+        <div className="ls-stagger" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {docs.map((doc, i) => (
+            <div key={doc.id} style={{ "--i": i }}>
+              <DocRow doc={doc} onClick={() => handleDocClick(doc)} i={i} />
+            </div>
+          ))}
         </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-        {/* Upload CTA */}
-        <button
-          onClick={() => navigate("/upload")}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-2xl p-5 flex items-center gap-4 text-left transition-colors shadow-sm"
-        >
-          <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </div>
-          <div>
-            <p className="font-semibold text-base">Upload Dokumen Baru</p>
-            <p className="text-blue-200 text-sm">PDF hingga 20 MB</p>
-          </div>
-        </button>
-
-        {/* Document list */}
-        <div>
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
-            Dokumen Saya
-          </h2>
-
-          {loading && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400 text-sm">
-              Memuat dokumen...
-            </div>
-          )}
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
-          {!loading && !error && docs.length === 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-              <p className="text-slate-400 text-sm">Belum ada dokumen. Upload sekarang!</p>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {docs.map((doc) => (
-              <button
-                key={doc.id}
-                onClick={() => handleDocClick(doc)}
-                className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-5 text-left hover:border-blue-300 hover:shadow-md transition-all"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-900 text-sm truncate">{doc.title}</p>
-                    <p className="text-xs text-slate-400 mt-0.5 font-mono">{doc.document_code}</p>
-                  </div>
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${STATUS_COLORS[doc.status] || "bg-slate-100 text-slate-600"}`}>
-                    {STATUS_LABELS[doc.status] || doc.status}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mt-2.5">{formatDate(doc.uploaded_at)}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      </main>
-    </div>
+      )}
+    </AppShell>
   );
 }

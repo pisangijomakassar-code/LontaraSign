@@ -1,16 +1,19 @@
-import hashlib
 import random
 import re
 import secrets
 from datetime import datetime
 
+from passlib.context import CryptContext
+
+_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    return _pwd_ctx.hash(password)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return hash_password(plain) == hashed
+    return _pwd_ctx.verify(plain, hashed)
 
 
 def generate_document_code() -> str:

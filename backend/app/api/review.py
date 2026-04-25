@@ -24,8 +24,13 @@ async def trigger_review(
 ):
     doc = _get_owned_doc(doc_id, current_user.id, db)
 
+    # Idempotent: kalau sudah di-review, langsung kembalikan hasil existing (skip AI call).
+    # Re-review hanya dilakukan untuk draft baru atau dokumen yang ditandai perlu revisi.
     if doc.status not in ("draft_uploaded", "needs_revision"):
-        error_response(400, f"Dokumen dengan status '{doc.status}' tidak dapat di-review ulang")
+        existing = db.scalar(select(DocumentReview).where(DocumentReview.document_id == doc_id))
+        if existing:
+            return success_response("Review sudah tersedia", _review_dict(existing))
+        error_response(400, f"Dokumen dengan status '{doc.status}' tidak dapat di-review")
 
     # Extract text
     text = ""
@@ -37,19 +42,12 @@ async def trigger_review(
     # AI review (placeholder)
     result = await review_document_text(text)
 
-    # Upsert review record
+    # Upsert review record — tahan race condition (mis. React StrictMode double-invoke).
+    # Strategi: coba INSERT dulu, kalau IntegrityError (duplicate document_id),
+    # rollback lalu UPDATE record yang sudah ada.
+    from sqlalchemy.exc import IntegrityError
     existing = db.scalar(select(DocumentReview).where(DocumentReview.document_id == doc_id))
-    if existing:
-        existing.extracted_text = text
-        existing.ai_summary = result["summary"]
-        existing.ai_points_json = result["points"]
-        existing.ai_notes_json = result["notes"]
-        existing.ai_recommendation = result["recommendation"]
-        existing.reviewed_by_system = result["reviewed_by_system"]
-        db.commit()
-        db.refresh(existing)
-        review = existing
-    else:
+    if existing is None:
         review = DocumentReview(
             document_id=doc_id,
             extracted_text=text,
@@ -60,8 +58,23 @@ async def trigger_review(
             reviewed_by_system=result["reviewed_by_system"],
         )
         db.add(review)
+        try:
+            db.commit()
+            db.refresh(review)
+        except IntegrityError:
+            db.rollback()
+            existing = db.scalar(select(DocumentReview).where(DocumentReview.document_id == doc_id))
+
+    if existing is not None:
+        existing.extracted_text = text
+        existing.ai_summary = result["summary"]
+        existing.ai_points_json = result["points"]
+        existing.ai_notes_json = result["notes"]
+        existing.ai_recommendation = result["recommendation"]
+        existing.reviewed_by_system = result["reviewed_by_system"]
         db.commit()
-        db.refresh(review)
+        db.refresh(existing)
+        review = existing
 
     doc.status = "reviewed_by_ai"
     db.commit()
@@ -135,9 +148,13 @@ def approve_document(
 
 
 def _get_owned_doc(doc_id: int, user_id: int, db: Session) -> Document:
+    from app.models.user import User as _U
+    user = db.scalar(select(_U).where(_U.id == user_id))
     doc = db.scalar(select(Document).where(Document.id == doc_id))
     if not doc:
         error_response(404, "Dokumen tidak ditemukan")
+    if user and user.organization_id and doc.organization_id == user.organization_id:
+        return doc
     if doc.uploaded_by != user_id:
         error_response(403, "Akses ditolak")
     return doc

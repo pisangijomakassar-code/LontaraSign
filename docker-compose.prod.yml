@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: lontarasign_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE:      ${MYSQL_DATABASE}
+      MYSQL_USER:          ${MYSQL_USER}
+      MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
+    expose: ["3306"]
+    volumes: ["mysql_data:/var/lib/mysql"]
+    networks: [lontarasign_net]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: { context: ./backend, dockerfile: Dockerfile }
+    container_name: lontarasign_backend
+    restart: always
+    env_file: [.env]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    expose: ["8000"]
+    volumes:
+      - storage_data:/app/storage
+    networks: [lontarasign_net]
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+
+  frontend:
+    build: { context: ./frontend, dockerfile: Dockerfile.prod }
+    container_name: lontarasign_frontend
+    restart: always
+    depends_on: [backend]
+    expose: ["80"]
+    networks: [lontarasign_net]
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: lontarasign_caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [lontarasign_net]
+    depends_on: [backend, frontend]
+
+volumes:
+  mysql_data:
+  storage_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  lontarasign_net: { driver: bridge }

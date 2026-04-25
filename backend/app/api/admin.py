@@ -17,9 +17,12 @@ router = APIRouter()
 @router.get("/documents")
 def admin_list_documents(
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
 ):
-    docs = db.scalars(select(Document).order_by(Document.uploaded_at.desc())).all()
+    q = select(Document).order_by(Document.uploaded_at.desc())
+    if admin.organization_id:
+        q = q.where(Document.organization_id == admin.organization_id)
+    docs = db.scalars(q).all()
     uploaders = {u.id: u for u in db.scalars(select(User)).all()}
 
     return success_response("Semua dokumen (admin)", {"items": [

@@ -10,6 +10,15 @@ const buildHeaders = (extra = {}) => {
   return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra };
 };
 
+// Auto-logout + redirect ke /login saat token tidak valid (session hilang karena backend restart, dll).
+function handleAuthFailure() {
+  clearToken();
+  if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+    // Pakai setTimeout supaya error masih bisa di-throw ke caller sebelum redirect
+    setTimeout(() => { window.location.href = "/login"; }, 50);
+  }
+}
+
 export async function apiRequest(path, options = {}) {
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
@@ -17,7 +26,10 @@ export async function apiRequest(path, options = {}) {
   });
   const isJson = (res.headers.get("content-type") || "").includes("application/json");
   const payload = isJson ? await res.json() : await res.blob();
-  if (!res.ok) throw payload;
+  if (!res.ok) {
+    if (res.status === 401) handleAuthFailure();
+    throw payload;
+  }
   return payload;
 }
 
@@ -27,6 +39,7 @@ export async function apiDownload(path) {
     headers: buildHeaders(),
   });
   if (!res.ok) {
+    if (res.status === 401) handleAuthFailure();
     const isJson = (res.headers.get("content-type") || "").includes("application/json");
     throw isJson ? await res.json() : { message: "Download gagal" };
   }
