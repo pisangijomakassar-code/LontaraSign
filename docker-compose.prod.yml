@@ -38,28 +38,13 @@ services:
     container_name: lontarasign_frontend
     restart: always
     depends_on: [backend]
-    expose: ["80"]
-    networks: [lontarasign_net]
-
-  caddy:
-    image: caddy:2-alpine
-    container_name: lontarasign_caddy
-    restart: always
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - "8080:80"
     networks: [lontarasign_net]
-    depends_on: [backend, frontend]
 
 volumes:
   mysql_data:
   storage_data:
-  caddy_data:
-  caddy_config:
 
 networks:
   lontarasign_net: { driver: bridge }
