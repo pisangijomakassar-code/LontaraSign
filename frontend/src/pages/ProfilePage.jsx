@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
-import { updateMe } from "../features/auth/authApi";
+import { getMe, updateMe } from "../features/auth/authApi";
 import { getErrorMessage } from "../lib/utils";
 import { LS } from "../design/tokens";
 import { Btn, Card, Input, LontaraTag } from "../design/primitives";
@@ -33,6 +33,16 @@ export default function ProfilePage() {
   const [errorPw, setErrorPw] = useState("");
 
   if (!isAuthenticated) { navigate("/login"); return null; }
+
+  useEffect(() => {
+    if (!user) {
+      getMe().then((res) => {
+        setUser(res.data);
+        setForm({ name: res.data.name || "", title: res.data.title || "" });
+      }).catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
