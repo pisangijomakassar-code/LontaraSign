@@ -11,11 +11,9 @@ from app.models.user import User
 from app.schemas.auth import LoginRequest
 from app.utils.helpers import verify_password
 
-router = APIRouter()
+from app.core.limiter import limiter
 
-def _get_limiter():
-    from app.main import limiter
-    return limiter
+router = APIRouter()
 
 
 def _org_dict(db: Session, org_id):
@@ -28,7 +26,7 @@ def _org_dict(db: Session, org_id):
 
 
 @router.post("/login")
-@_get_limiter().limit("10/minute")
+@limiter.limit("10/minute")
 def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.scalar(select(User).where(User.email == payload.email, User.is_active == True))
     if not user or not verify_password(payload.password, user.password_hash):

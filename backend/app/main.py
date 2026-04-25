@@ -1,10 +1,10 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select, text
+
+from app.core.limiter import limiter
 
 from app.api.auth import router as auth_router
 from app.api.documents import router as documents_router
@@ -32,8 +32,6 @@ import app.models.user_token  # noqa
 from app.models.organization import Organization
 from app.models.user import User
 from app.models.document import Document
-
-limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(title="LontaraSign MVP API", version="0.3.0")
 app.state.limiter = limiter
