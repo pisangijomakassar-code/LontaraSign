@@ -1,6 +1,6 @@
 import { apiDownload, apiRequest, getToken } from "../../lib/api";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
 export const uploadDrawSignature = (id, image_base64) =>
   apiRequest(`/documents/${id}/signature/draw`, {
@@ -27,7 +27,7 @@ export const downloadSignedDocument = (id) =>
 
 export const getPagePreview = async (id) => {
   const token = getToken();
-  const res = await fetch(`${API_BASE_URL}/documents/${id}/page-preview`, {
+  const res = await fetch(`${API_BASE}/documents/${id}/page-preview`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) throw new Error("Gagal memuat preview halaman PDF");
