@@ -170,11 +170,14 @@ export default function SignPage() {
 
   const onPreviewMouseDown = (e) => {
     if (!currentSigPreview || !pagePreviewUrl) return;
-    setIsDragging(true);
+    e.preventDefault();
     dragStart.current = { mx: e.clientX, my: e.clientY, sx: sigPos.x, sy: sigPos.y };
+    setIsDragging(true);
   };
   const onPreviewMouseMove = (e) => {
-    if (!isDragging || !dragStart.current) return;
+    // Gunakan dragStart.current sebagai sumber kebenaran — isDragging state
+    // terlambat satu render sehingga tidak bisa diandalkan di handler synchronous ini.
+    if (!dragStart.current) return;
     const rect = previewContainerRef.current.getBoundingClientRect();
     const dxPdf = ((e.clientX - dragStart.current.mx) / rect.width) * pdfDims.w;
     const dyPdf = ((e.clientY - dragStart.current.my) / rect.height) * pdfDims.h;
@@ -183,15 +186,15 @@ export default function SignPage() {
       y: Math.max(0, Math.min(pdfDims.h - DEFAULT_SIG_H, dragStart.current.sy + dyPdf)),
     });
   };
-  const onPreviewMouseUp = () => setIsDragging(false);
+  const onPreviewMouseUp = () => { dragStart.current = null; setIsDragging(false); };
   const onPreviewTouchStart = (e) => {
     if (!currentSigPreview || !pagePreviewUrl) return;
     e.preventDefault();
-    setIsDragging(true);
     dragStart.current = { mx: e.touches[0].clientX, my: e.touches[0].clientY, sx: sigPos.x, sy: sigPos.y };
+    setIsDragging(true);
   };
   const onPreviewTouchMove = (e) => {
-    if (!isDragging || !dragStart.current) return;
+    if (!dragStart.current) return;
     e.preventDefault();
     const rect = previewContainerRef.current.getBoundingClientRect();
     const dx = e.touches[0].clientX - dragStart.current.mx;
@@ -201,7 +204,7 @@ export default function SignPage() {
       y: Math.max(0, Math.min(pdfDims.h - DEFAULT_SIG_H, dragStart.current.sy + (dy / rect.height) * pdfDims.h)),
     });
   };
-  const onPreviewTouchEnd = () => setIsDragging(false);
+  const onPreviewTouchEnd = () => { dragStart.current = null; setIsDragging(false); };
 
   // Click-to-place: klik di mana saja di preview untuk pindahkan overlay
   // (center overlay ke titik klik). Dipicu hanya kalau user klik di luar overlay.
