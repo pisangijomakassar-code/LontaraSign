@@ -8,15 +8,18 @@ def _resolve_page_index(doc: fitz.Document, page) -> int:
     return max(0, min(int(page) - 1, total - 1))
 
 
-def render_page_to_png(pdf_path: str, page="last", zoom: float = 1.5) -> tuple[bytes, float, float]:
+def render_page_to_png(pdf_path: str, page="last", zoom: float = 1.5) -> tuple[bytes, float, float, int]:
     """Render halaman PDF ke PNG.
 
     PENTING: `page_width/height` yang dikembalikan adalah ukuran *cropbox*
     (area yang benar-benar terlihat oleh user), bukan mediabox. Ini harus
     konsisten dengan `embed_signature_to_pdf` agar posisi signature yang
     dikirim frontend tidak bergeser saat di-embed ke PDF.
+
+    Return: (img_bytes, page_width, page_height, total_pages)
     """
     doc = fitz.open(pdf_path)
+    total_pages = len(doc)
     idx = _resolve_page_index(doc, page)
     pg = doc[idx]
 
@@ -30,7 +33,7 @@ def render_page_to_png(pdf_path: str, page="last", zoom: float = 1.5) -> tuple[b
     pix = pg.get_pixmap(matrix=mat, alpha=False)
     img_bytes = pix.tobytes("png")
     doc.close()
-    return img_bytes, page_width, page_height
+    return img_bytes, page_width, page_height, total_pages
 
 
 def extract_text_from_pdf(pdf_path: str) -> str:

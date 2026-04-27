@@ -25,17 +25,18 @@ export const finalizeSign = (id, payload) =>
 export const downloadSignedDocument = (id) =>
   apiDownload(`/documents/${id}/download-signed`);
 
-export const getPagePreview = async (id) => {
+export const getPagePreview = async (id, page = "last") => {
   const token = getToken();
-  const res = await fetch(`${API_BASE}/documents/${id}/page-preview`, {
+  const res = await fetch(`${API_BASE}/documents/${id}/page-preview?page=${page}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) throw new Error("Gagal memuat preview halaman PDF");
   const pageWidth = parseFloat(res.headers.get("X-Page-Width") || "595");
   const pageHeight = parseFloat(res.headers.get("X-Page-Height") || "842");
+  const totalPages = parseInt(res.headers.get("X-Total-Pages") || "1", 10);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
-  return { url, pageWidth, pageHeight };
+  return { url, pageWidth, pageHeight, totalPages };
 };
 
 // Saved signatures

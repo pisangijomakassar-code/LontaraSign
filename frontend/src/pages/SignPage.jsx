@@ -52,6 +52,8 @@ export default function SignPage() {
 
   const [pagePreviewUrl, setPagePreviewUrl] = useState(null);
   const [pdfDims, setPdfDims] = useState({ w: 595, h: 842 });
+  const [totalPages, setTotalPages] = useState(1);
+  const [selectedPage, setSelectedPage] = useState("last");
   // Default posisi: area TTD umum (kanan-bawah, ~70% dari atas)
   const [sigPos, setSigPos] = useState({ x: 380, y: 640 });
   const [isDragging, setIsDragging] = useState(false);
@@ -60,7 +62,7 @@ export default function SignPage() {
   if (!isAuthenticated) { navigate("/login"); return null; }
 
   useEffect(() => {
-    Promise.all([getDocument(id), loadPagePreview(), loadSavedSignatures()])
+    Promise.all([getDocument(id), loadPagePreview("last"), loadSavedSignatures()])
       .then(([docRes]) => {
         setDoc(docRes.data);
         if (docRes.data.status !== "pending_sign") {
@@ -72,11 +74,14 @@ export default function SignPage() {
   // eslint-disable-next-line
   }, [id]);
 
-  const loadPagePreview = async () => {
+  const loadPagePreview = async (page = selectedPage) => {
     try {
-      const { url, pageWidth, pageHeight } = await getPagePreview(id);
+      const { url, pageWidth, pageHeight, totalPages: tp } = await getPagePreview(id, page);
       setPagePreviewUrl(url);
       setPdfDims({ w: pageWidth, h: pageHeight });
+      setTotalPages(tp);
+      // Reset posisi TTD saat ganti halaman
+      setSigPos({ x: 380, y: Math.round(pageHeight * 0.76) });
     } catch (_) {}
   };
 
@@ -256,7 +261,7 @@ export default function SignPage() {
         // DB enum hanya menerima 'draw' atau 'upload'. Saved signature secara
         // efektif adalah drawn image yang dipakai ulang → kirim sebagai 'draw'.
         sign_method: tab === "upload" ? "upload" : "draw",
-        page: "last",
+        page: selectedPage,
         position: { x: sigPos.x, y: sigPos.y },
       });
       navigate(`/documents/${id}/result`);
@@ -512,6 +517,67 @@ export default function SignPage() {
                 {currentSigPreview ? "Klik atau seret kotak untuk atur posisi" : "Gambar TTD di kiri untuk mulai"}
               </div>
             </div>
+
+            {/* Navigator halaman */}
+            {totalPages > 1 && (
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                gap: 8, marginBottom: 10, flexWrap: "wrap",
+              }}>
+                <button
+                  onClick={() => {
+                    const cur = selectedPage === "last" ? totalPages : parseInt(selectedPage);
+                    if (cur <= 1) return;
+                    const prev = cur - 1;
+                    setSelectedPage(String(prev));
+                    loadPagePreview(String(prev));
+                  }}
+                  disabled={selectedPage === "1" || (selectedPage === "last" && totalPages === 1)}
+                  style={{
+                    padding: "4px 10px", borderRadius: 6, border: `1px solid ${LS.border}`,
+                    background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                    color: LS.ink, opacity: (selectedPage === "1") ? 0.4 : 1,
+                  }}>‹</button>
+
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "center" }}>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+                    const active = selectedPage === String(p) || (selectedPage === "last" && p === totalPages);
+                    return (
+                      <button key={p}
+                        onClick={() => {
+                          const pg = p === totalPages ? "last" : String(p);
+                          setSelectedPage(pg);
+                          loadPagePreview(pg);
+                        }}
+                        style={{
+                          width: 30, height: 30, borderRadius: 6, border: `1px solid ${active ? LS.brand : LS.border}`,
+                          background: active ? LS.brand : "#fff", color: active ? "#fff" : LS.ink,
+                          cursor: "pointer", fontSize: 12, fontWeight: active ? 700 : 400,
+                        }}>{p}</button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => {
+                    const cur = selectedPage === "last" ? totalPages : parseInt(selectedPage);
+                    if (cur >= totalPages) return;
+                    const next = cur === totalPages - 1 ? "last" : String(cur + 1);
+                    setSelectedPage(next);
+                    loadPagePreview(next);
+                  }}
+                  disabled={selectedPage === "last"}
+                  style={{
+                    padding: "4px 10px", borderRadius: 6, border: `1px solid ${LS.border}`,
+                    background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                    color: LS.ink, opacity: selectedPage === "last" ? 0.4 : 1,
+                  }}>›</button>
+
+                <div style={{ fontSize: 11, color: LS.mute, width: "100%", textAlign: "center" }}>
+                  Halaman {selectedPage === "last" ? totalPages : selectedPage} dari {totalPages}
+                </div>
+              </div>
+            )}
             {pagePreviewUrl ? (
               <>
                 <div ref={previewContainerRef}

@@ -124,7 +124,7 @@ def get_page_preview(
 ):
     doc = _get_owned_doc(doc_id, current_user.id, db)
     try:
-        img_bytes, page_width, page_height = render_page_to_png(doc.original_file_path, page)
+        img_bytes, page_width, page_height, total_pages = render_page_to_png(doc.original_file_path, page)
     except Exception as e:
         error_response(500, f"Gagal merender halaman PDF: {str(e)}")
     return Response(
@@ -133,6 +133,7 @@ def get_page_preview(
         headers={
             "X-Page-Width": str(page_width),
             "X-Page-Height": str(page_height),
+            "X-Total-Pages": str(total_pages),
             "Cache-Control": "no-cache",
         },
     )
