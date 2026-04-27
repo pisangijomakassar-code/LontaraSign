@@ -102,7 +102,12 @@ export default function SignPage() {
     drawing.current = true;
     lastPos.current = getPos(e, canvasRef.current);
   };
-  const endDraw = () => { drawing.current = false; };
+  const endDraw = () => {
+    drawing.current = false;
+    if (hasDrawn && canvasRef.current) {
+      setCurrentSigPreview(toBase64FromCanvas(canvasRef.current));
+    }
+  };
   const draw = (e) => {
     e.preventDefault();
     if (!drawing.current) return;
@@ -127,7 +132,7 @@ export default function SignPage() {
     setCurrentSigPreview(null);
   };
   const confirmDraw = () => {
-    if (!hasDrawn) return;
+    if (!hasDrawn || !canvasRef.current) return;
     setCurrentSigPreview(toBase64FromCanvas(canvasRef.current));
   };
 
@@ -290,7 +295,10 @@ export default function SignPage() {
         }}>{error}</div>
       )}
 
-      <div style={{ display: "grid", gap: 16, gridTemplateColumns: "minmax(0, 1fr)", maxWidth: 1100 }}>
+      <div style={{ display: "grid", gap: 16, gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", maxWidth: 1200, alignItems: "start" }}
+           className="sign-layout">
+        {/* KOLOM KIRI: input tanda tangan */}
+        <div style={{ display: "grid", gap: 16 }}>
         {/* Tab switch */}
         <Card pad={6}>
           <div style={{ display: "flex", gap: 4 }}>
@@ -339,13 +347,6 @@ export default function SignPage() {
               <div style={{ position: "absolute", left: 24, right: 24, bottom: 40, borderTop: `1px solid ${LS.borderStrong}`, opacity: 0.7, pointerEvents: "none" }} />
               <div style={{ position: "absolute", left: 24, bottom: 14, fontSize: 11, color: LS.muteSoft, letterSpacing: 0.4, pointerEvents: "none" }}>× Tanda tangan di atas garis</div>
             </div>
-            {hasDrawn && (
-              <div style={{ marginTop: 12 }}>
-                <Btn variant="subtle" icon="check" onClick={confirmDraw} full>
-                  Gunakan Tanda Tangan Ini
-                </Btn>
-              </div>
-            )}
             {hasDrawn && (
               <label style={{
                 marginTop: 10, display: "flex", gap: 8, fontSize: 13, color: LS.inkSoft,
@@ -464,53 +465,6 @@ export default function SignPage() {
           </Card>
         )}
 
-        {/* Position preview */}
-        {currentSigPreview && pagePreviewUrl && (
-          <Card pad={20}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: LS.inkSoft }}>Posisikan tanda tangan</div>
-              <div style={{ fontSize: 11, color: LS.mute }}>Klik di area target, atau seret kotak dashed</div>
-            </div>
-            <div ref={previewContainerRef}
-              style={{ position: "relative", overflow: "hidden", borderRadius: 12,
-                       border: `1px solid ${LS.border}`, userSelect: "none", touchAction: "none",
-                       maxWidth: 560, margin: "0 auto", cursor: currentSigPreview ? "crosshair" : "default" }}
-              onMouseMove={onPreviewMouseMove} onMouseUp={onPreviewMouseUp} onMouseLeave={onPreviewMouseUp}
-              onTouchMove={onPreviewTouchMove} onTouchEnd={onPreviewTouchEnd}
-              onClick={onPreviewContainerClick}>
-              <img src={pagePreviewUrl} alt="PDF" style={{ width: "100%", display: "block" }} draggable={false} />
-              <div data-sig-overlay style={{
-                position: "absolute",
-                left: `${(sigPos.x / pdfDims.w) * 100}%`,
-                top: `${(sigPos.y / pdfDims.h) * 100}%`,
-                width: `${(DEFAULT_SIG_W / pdfDims.w) * 100}%`,
-                height: `${(DEFAULT_SIG_H / pdfDims.h) * 100}%`,
-                minWidth: 60, minHeight: 20,
-                border: `2px dashed ${isDragging ? LS.brand : LS.brandInk}`,
-                borderRadius: 8, overflow: "hidden",
-                background: "rgba(255,255,255,0.88)",
-                cursor: isDragging ? "grabbing" : "grab",
-                boxShadow: `0 0 0 2px ${LS.brandRing}`,
-              }}
-              onMouseDown={onPreviewMouseDown} onTouchStart={onPreviewTouchStart}>
-                <img src={currentSigPreview} alt="sig"
-                  style={{ width: "100%", height: "100%", objectFit: "contain" }} draggable={false} />
-              </div>
-            </div>
-            <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: LS.mute }}>
-              Posisi: x={Math.round(sigPos.x)}, y={Math.round(sigPos.y)} dari total {Math.round(pdfDims.w)}×{Math.round(pdfDims.h)} · Halaman terakhir
-            </div>
-          </Card>
-        )}
-
-        {!currentSigPreview && pagePreviewUrl && (
-          <Card pad={14} style={{ background: LS.surfaceMuted }}>
-            <div style={{ fontSize: 12, color: LS.mute, textAlign: "center" }}>
-              Selesaikan pembuatan tanda tangan di atas untuk mengatur posisinya di dokumen.
-            </div>
-          </Card>
-        )}
-
         {/* Signer snapshot */}
         {user && (
           <Card pad={16}>
@@ -543,6 +497,76 @@ export default function SignPage() {
         }}>
           <LontaraTag size={14} color={LS.ai} />
           Dokumen akan disegel secara digital dan mendapatkan QR untuk verifikasi.
+        </div>
+        </div>{/* end kolom kiri */}
+
+        {/* KOLOM KANAN: preview posisi tanda tangan di PDF */}
+        <div style={{ position: "sticky", top: 16 }}>
+          <Card pad={20}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: LS.inkSoft }}>Posisikan tanda tangan</div>
+              <div style={{ fontSize: 11, color: LS.mute }}>
+                {currentSigPreview ? "Klik atau seret kotak untuk atur posisi" : "Gambar TTD di kiri untuk mulai"}
+              </div>
+            </div>
+            {pagePreviewUrl ? (
+              <>
+                <div ref={previewContainerRef}
+                  style={{
+                    position: "relative", overflow: "hidden", borderRadius: 12,
+                    border: `1px solid ${LS.border}`, userSelect: "none", touchAction: "none",
+                    cursor: currentSigPreview ? "crosshair" : "default",
+                  }}
+                  onMouseMove={onPreviewMouseMove} onMouseUp={onPreviewMouseUp} onMouseLeave={onPreviewMouseUp}
+                  onTouchMove={onPreviewTouchMove} onTouchEnd={onPreviewTouchEnd}
+                  onClick={currentSigPreview ? onPreviewContainerClick : undefined}>
+                  <img src={pagePreviewUrl} alt="PDF halaman terakhir" style={{ width: "100%", display: "block" }} draggable={false} />
+                  {currentSigPreview ? (
+                    <div data-sig-overlay style={{
+                      position: "absolute",
+                      left: `${(sigPos.x / pdfDims.w) * 100}%`,
+                      top: `${(sigPos.y / pdfDims.h) * 100}%`,
+                      width: `${(DEFAULT_SIG_W / pdfDims.w) * 100}%`,
+                      height: `${(DEFAULT_SIG_H / pdfDims.h) * 100}%`,
+                      minWidth: 60, minHeight: 20,
+                      border: `2px dashed ${isDragging ? LS.brand : LS.brandInk}`,
+                      borderRadius: 8, overflow: "hidden",
+                      background: "rgba(255,255,255,0.88)",
+                      cursor: isDragging ? "grabbing" : "grab",
+                      boxShadow: `0 0 0 2px ${LS.brandRing}`,
+                    }}
+                    onMouseDown={onPreviewMouseDown} onTouchStart={onPreviewTouchStart}>
+                      <img src={currentSigPreview} alt="sig"
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }} draggable={false} />
+                    </div>
+                  ) : (
+                    <div style={{
+                      position: "absolute",
+                      left: `${(sigPos.x / pdfDims.w) * 100}%`,
+                      top: `${(sigPos.y / pdfDims.h) * 100}%`,
+                      width: `${(DEFAULT_SIG_W / pdfDims.w) * 100}%`,
+                      height: `${(DEFAULT_SIG_H / pdfDims.h) * 100}%`,
+                      minWidth: 60, minHeight: 20,
+                      border: `2px dashed ${LS.border}`,
+                      borderRadius: 8,
+                      background: "rgba(240,240,240,0.6)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 9, color: LS.mute, pointerEvents: "none",
+                    }}>
+                      TTD
+                    </div>
+                  )}
+                </div>
+                <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: LS.mute }}>
+                  Posisi: x={Math.round(sigPos.x)}, y={Math.round(sigPos.y)} · Halaman terakhir
+                </div>
+              </>
+            ) : (
+              <div style={{ textAlign: "center", padding: "40px 0", color: LS.mute, fontSize: 13 }}>
+                Memuat preview dokumen...
+              </div>
+            )}
+          </Card>
         </div>
       </div>
     </AppShell>

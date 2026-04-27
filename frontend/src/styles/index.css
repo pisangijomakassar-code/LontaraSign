@@ -127,6 +127,11 @@
 
 .ls-confetti { animation: lsConfetti 2s ease-out infinite; }
 
+/* Sign page: satu kolom di layar kecil */
+@media (max-width: 768px) {
+  .sign-layout { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; }
 }
