@@ -67,6 +67,8 @@ def finalize_sign(
     pos = payload.position or {}
     x = float(pos.get("x", 380))
     y = float(pos.get("y", 120))
+    w = float(pos.get("width", 150))
+    h = float(pos.get("height", 60))
 
     output_filename = f"{doc.document_code}_signed.pdf"
     output_path = str(SIGNED_DIR / output_filename)
@@ -79,6 +81,8 @@ def finalize_sign(
             page=payload.page,
             x=x,
             y=y,
+            width=w,
+            height=h,
         )
     except Exception as e:
         error_response(500, f"Gagal menempel tanda tangan ke PDF: {str(e)}")

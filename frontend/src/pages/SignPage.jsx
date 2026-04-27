@@ -20,8 +20,8 @@ const TABS = [
   { key: "saved", label: "Tersimpan", icon: "history" },
 ];
 
-const DEFAULT_SIG_W = 150;
-const DEFAULT_SIG_H = 60;
+const MIN_SIG_W = 40;
+const MIN_SIG_H = 20;
 
 export default function SignPage() {
   const { id } = useParams();
@@ -56,8 +56,10 @@ export default function SignPage() {
   const [selectedPage, setSelectedPage] = useState("last");
   // Default posisi: area TTD umum (kanan-bawah, ~70% dari atas)
   const [sigPos, setSigPos] = useState({ x: 380, y: 640 });
+  const [sigSize, setSigSize] = useState({ w: 150, h: 60 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef(null);
+  const resizeStart = useRef(null); // { corner, mx, my, sx, sy, sw, sh }
 
   if (!isAuthenticated) { navigate("/login"); return null; }
 
@@ -80,8 +82,8 @@ export default function SignPage() {
       setPagePreviewUrl(url);
       setPdfDims({ w: pageWidth, h: pageHeight });
       setTotalPages(tp);
-      // Reset posisi TTD saat ganti halaman
       setSigPos({ x: 380, y: Math.round(pageHeight * 0.76) });
+      setSigSize({ w: 150, h: 60 });
     } catch (_) {}
   };
 
@@ -173,13 +175,43 @@ export default function SignPage() {
     return { x: (pdfX / pdfDims.w) * width, y: (pdfY / pdfDims.h) * height };
   }, [pdfDims]);
 
+  const onResizeMouseDown = (corner, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = previewContainerRef.current.getBoundingClientRect();
+    resizeStart.current = {
+      corner, mx: e.clientX, my: e.clientY,
+      sx: sigPos.x, sy: sigPos.y,
+      sw: sigSize.w, sh: sigSize.h,
+      rw: rect.width, rh: rect.height,
+    };
+  };
+
   const onPreviewMouseDown = (e) => {
     if (!currentSigPreview || !pagePreviewUrl) return;
     e.preventDefault();
     dragStart.current = { mx: e.clientX, my: e.clientY, sx: sigPos.x, sy: sigPos.y };
     setIsDragging(true);
   };
+
   const onPreviewMouseMove = (e) => {
+    if (resizeStart.current) {
+      const { corner, mx, my, sx, sy, sw, sh, rw, rh } = resizeStart.current;
+      const dx = ((e.clientX - mx) / rw) * pdfDims.w;
+      const dy = ((e.clientY - my) / rh) * pdfDims.h;
+      let nx = sx, ny = sy, nw = sw, nh = sh;
+      if (corner === "se") { nw = sw + dx; nh = sh + dy; }
+      if (corner === "sw") { nx = sx + dx; nw = sw - dx; nh = sh + dy; }
+      if (corner === "ne") { nw = sw + dx; ny = sy + dy; nh = sh - dy; }
+      if (corner === "nw") { nx = sx + dx; nw = sw - dx; ny = sy + dy; nh = sh - dy; }
+      nw = Math.max(MIN_SIG_W, Math.min(pdfDims.w - nx, nw));
+      nh = Math.max(MIN_SIG_H, Math.min(pdfDims.h - ny, nh));
+      nx = Math.max(0, Math.min(pdfDims.w - nw, nx));
+      ny = Math.max(0, Math.min(pdfDims.h - nh, ny));
+      setSigPos({ x: nx, y: ny });
+      setSigSize({ w: nw, h: nh });
+      return;
+    }
     // Gunakan dragStart.current sebagai sumber kebenaran — isDragging state
     // terlambat satu render sehingga tidak bisa diandalkan di handler synchronous ini.
     if (!dragStart.current) return;
@@ -187,11 +219,11 @@ export default function SignPage() {
     const dxPdf = ((e.clientX - dragStart.current.mx) / rect.width) * pdfDims.w;
     const dyPdf = ((e.clientY - dragStart.current.my) / rect.height) * pdfDims.h;
     setSigPos({
-      x: Math.max(0, Math.min(pdfDims.w - DEFAULT_SIG_W, dragStart.current.sx + dxPdf)),
-      y: Math.max(0, Math.min(pdfDims.h - DEFAULT_SIG_H, dragStart.current.sy + dyPdf)),
+      x: Math.max(0, Math.min(pdfDims.w - sigSize.w, dragStart.current.sx + dxPdf)),
+      y: Math.max(0, Math.min(pdfDims.h - sigSize.h, dragStart.current.sy + dyPdf)),
     });
   };
-  const onPreviewMouseUp = () => { dragStart.current = null; setIsDragging(false); };
+  const onPreviewMouseUp = () => { dragStart.current = null; resizeStart.current = null; setIsDragging(false); };
   const onPreviewTouchStart = (e) => {
     if (!currentSigPreview || !pagePreviewUrl) return;
     e.preventDefault();
@@ -205,11 +237,11 @@ export default function SignPage() {
     const dx = e.touches[0].clientX - dragStart.current.mx;
     const dy = e.touches[0].clientY - dragStart.current.my;
     setSigPos({
-      x: Math.max(0, Math.min(pdfDims.w - DEFAULT_SIG_W, dragStart.current.sx + (dx / rect.width) * pdfDims.w)),
-      y: Math.max(0, Math.min(pdfDims.h - DEFAULT_SIG_H, dragStart.current.sy + (dy / rect.height) * pdfDims.h)),
+      x: Math.max(0, Math.min(pdfDims.w - sigSize.w, dragStart.current.sx + (dx / rect.width) * pdfDims.w)),
+      y: Math.max(0, Math.min(pdfDims.h - sigSize.h, dragStart.current.sy + (dy / rect.height) * pdfDims.h)),
     });
   };
-  const onPreviewTouchEnd = () => { dragStart.current = null; setIsDragging(false); };
+  const onPreviewTouchEnd = () => { dragStart.current = null; resizeStart.current = null; setIsDragging(false); };
 
   // Click-to-place: klik di mana saja di preview untuk pindahkan overlay
   // (center overlay ke titik klik). Dipicu hanya kalau user klik di luar overlay.
@@ -222,11 +254,11 @@ export default function SignPage() {
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
     // Convert ke PDF coords, center overlay ke titik klik
-    const xPdf = (px / rect.width) * pdfDims.w - DEFAULT_SIG_W / 2;
-    const yPdf = (py / rect.height) * pdfDims.h - DEFAULT_SIG_H / 2;
+    const xPdf = (px / rect.width) * pdfDims.w - sigSize.w / 2;
+    const yPdf = (py / rect.height) * pdfDims.h - sigSize.h / 2;
     setSigPos({
-      x: Math.max(0, Math.min(pdfDims.w - DEFAULT_SIG_W, xPdf)),
-      y: Math.max(0, Math.min(pdfDims.h - DEFAULT_SIG_H, yPdf)),
+      x: Math.max(0, Math.min(pdfDims.w - sigSize.w, xPdf)),
+      y: Math.max(0, Math.min(pdfDims.h - sigSize.h, yPdf)),
     });
   };
 
@@ -262,7 +294,7 @@ export default function SignPage() {
         // efektif adalah drawn image yang dipakai ulang → kirim sebagai 'draw'.
         sign_method: tab === "upload" ? "upload" : "draw",
         page: selectedPage,
-        position: { x: sigPos.x, y: sigPos.y },
+        position: { x: sigPos.x, y: sigPos.y, width: sigSize.w, height: sigSize.h },
       });
       navigate(`/documents/${id}/result`);
     } catch (err) {
@@ -595,27 +627,41 @@ export default function SignPage() {
                       position: "absolute",
                       left: `${(sigPos.x / pdfDims.w) * 100}%`,
                       top: `${(sigPos.y / pdfDims.h) * 100}%`,
-                      width: `${(DEFAULT_SIG_W / pdfDims.w) * 100}%`,
-                      height: `${(DEFAULT_SIG_H / pdfDims.h) * 100}%`,
-                      minWidth: 60, minHeight: 20,
+                      width: `${(sigSize.w / pdfDims.w) * 100}%`,
+                      height: `${(sigSize.h / pdfDims.h) * 100}%`,
                       border: `2px dashed ${isDragging ? LS.brand : LS.brandInk}`,
-                      borderRadius: 8, overflow: "hidden",
+                      borderRadius: 8, overflow: "visible",
                       background: "rgba(255,255,255,0.88)",
                       cursor: isDragging ? "grabbing" : "grab",
                       boxShadow: `0 0 0 2px ${LS.brandRing}`,
                     }}
                     onMouseDown={onPreviewMouseDown} onTouchStart={onPreviewTouchStart}>
                       <img src={currentSigPreview} alt="sig"
-                        style={{ width: "100%", height: "100%", objectFit: "contain" }} draggable={false} />
+                        style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 6, display: "block" }} draggable={false} />
+                      {/* Resize handles di 4 sudut */}
+                      {[
+                        { corner: "nw", style: { top: -5, left: -5, cursor: "nw-resize" } },
+                        { corner: "ne", style: { top: -5, right: -5, cursor: "ne-resize" } },
+                        { corner: "sw", style: { bottom: -5, left: -5, cursor: "sw-resize" } },
+                        { corner: "se", style: { bottom: -5, right: -5, cursor: "se-resize" } },
+                      ].map(({ corner, style }) => (
+                        <div key={corner}
+                          onMouseDown={(e) => onResizeMouseDown(corner, e)}
+                          style={{
+                            position: "absolute", width: 10, height: 10,
+                            background: LS.brand, border: "2px solid #fff",
+                            borderRadius: 2, boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+                            ...style,
+                          }} />
+                      ))}
                     </div>
                   ) : (
                     <div style={{
                       position: "absolute",
                       left: `${(sigPos.x / pdfDims.w) * 100}%`,
                       top: `${(sigPos.y / pdfDims.h) * 100}%`,
-                      width: `${(DEFAULT_SIG_W / pdfDims.w) * 100}%`,
-                      height: `${(DEFAULT_SIG_H / pdfDims.h) * 100}%`,
-                      minWidth: 60, minHeight: 20,
+                      width: `${(sigSize.w / pdfDims.w) * 100}%`,
+                      height: `${(sigSize.h / pdfDims.h) * 100}%`,
                       border: `2px dashed ${LS.border}`,
                       borderRadius: 8,
                       background: "rgba(240,240,240,0.6)",
@@ -627,7 +673,7 @@ export default function SignPage() {
                   )}
                 </div>
                 <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: LS.mute }}>
-                  Posisi: x={Math.round(sigPos.x)}, y={Math.round(sigPos.y)} · Halaman terakhir
+                  Posisi: x={Math.round(sigPos.x)}, y={Math.round(sigPos.y)} · Ukuran: {Math.round(sigSize.w)}×{Math.round(sigSize.h)} · Hal. {selectedPage === "last" ? totalPages : selectedPage}
                 </div>
               </>
             ) : (
