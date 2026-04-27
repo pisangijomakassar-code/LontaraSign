@@ -39,8 +39,7 @@ async def trigger_review(
     except Exception:
         pass
 
-    # AI review (placeholder)
-    result = await review_document_text(text)
+    result = await review_document_text(text, db=db)
 
     # Upsert review record — tahan race condition (mis. React StrictMode double-invoke).
     # Strategi: coba INSERT dulu, kalau IntegrityError (duplicate document_id),

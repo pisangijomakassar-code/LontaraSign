@@ -28,6 +28,7 @@ import app.models.share         # noqa
 import app.models.log           # noqa
 import app.models.saved_signature  # noqa
 import app.models.user_token  # noqa
+import app.models.app_setting  # noqa
 
 from app.models.organization import Organization
 from app.models.user import User

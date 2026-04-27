@@ -42,7 +42,19 @@ def _build_prompt(text: str) -> str:
     return _REVIEW_PROMPT_TEMPLATE.format(text=text[:8000])
 
 
-async def review_document_text(text: str) -> dict:
+def _db_setting(db, key: str, default: str = "") -> str:
+    if db is None:
+        return default
+    try:
+        from sqlalchemy import select
+        from app.models.app_setting import AppSetting
+        row = db.scalar(select(AppSetting).where(AppSetting.key == key))
+        return (row.value or "").strip() if row and row.value else default
+    except Exception:
+        return default
+
+
+async def review_document_text(text: str, db=None) -> dict:
     if not text.strip():
         return {
             "summary": "Teks tidak dapat diekstrak dari dokumen ini. Dokumen mungkin berupa scan/image tanpa teks selectable.",
@@ -55,14 +67,14 @@ async def review_document_text(text: str) -> dict:
             "reviewed_by_system": "LontaraAI Review v1.0",
         }
 
-    api_key = os.getenv("AI_API_KEY", "").strip()
+    # DB settings override env vars
+    api_key = _db_setting(db, "llm_api_key") or os.getenv("AI_API_KEY", "").strip()
     if not api_key or api_key.startswith("your_") or api_key.endswith("_here"):
         return _placeholder_review(text)
 
-    # Auto-detect provider dari prefix key atau env var.
-    provider_env = os.getenv("AI_PROVIDER", "").strip().lower()
+    provider_env = _db_setting(db, "llm_provider") or os.getenv("AI_PROVIDER", "").strip().lower()
     is_openrouter = api_key.startswith("sk-or-") or provider_env == "openrouter"
-    model = os.getenv("AI_MODEL", "").strip() or (
+    model = _db_setting(db, "llm_model") or os.getenv("AI_MODEL", "").strip() or (
         "anthropic/claude-sonnet-4.5" if is_openrouter else "claude-sonnet-4-6"
     )
 

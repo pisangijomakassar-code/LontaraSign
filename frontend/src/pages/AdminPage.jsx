@@ -5,6 +5,7 @@ import { getMe } from "../features/auth/authApi";
 import {
   adminStats, adminListDocuments, adminGetTimeline,
   adminListUsers, adminPatchUser,
+  adminGetSettings, adminPatchSettings,
 } from "../features/admin/adminApi";
 import { formatDate, getErrorMessage } from "../lib/utils";
 import { LS } from "../design/tokens";
@@ -35,11 +36,158 @@ function StatCard({ icon, label, value, tone = "brand" }) {
   );
 }
 
+// ── Settings tab ──────────────────────────────────────────────────────────────
+function SettingsTab() {
+  const [settings, setSettings] = useState(null);
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    adminGetSettings().then((res) => {
+      setSettings(res.data);
+      setForm(res.data);
+    });
+  }, []);
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setSaved(false);
+    try {
+      await adminPatchSettings(form);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!form) return (
+    <Card pad={40}><div style={{ textAlign: "center", color: LS.mute, fontSize: 13 }}>Memuat...</div></Card>
+  );
+
+  const fieldStyle = {
+    width: "100%", height: 40, padding: "0 12px",
+    border: `1px solid ${LS.border}`, borderRadius: 10,
+    fontSize: 13, fontFamily: LS.font, background: LS.surface,
+    outline: "none", boxSizing: "border-box", color: LS.ink,
+  };
+  const labelStyle = { fontSize: 12, fontWeight: 600, color: LS.inkSoft, marginBottom: 5, display: "block" };
+  const groupStyle = { display: "flex", flexDirection: "column", marginBottom: 18 };
+  const sectionStyle = {
+    background: LS.surface, border: `1px solid ${LS.border}`,
+    borderRadius: 14, padding: "20px 20px 16px", marginBottom: 18,
+  };
+
+  return (
+    <form onSubmit={handleSave}>
+      {/* Batas Dokumen */}
+      <div style={sectionStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: 8, background: `${LS.brand}14`, color: LS.brand,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Ic name="doc" size={14} />
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: LS.ink }}>Batas Dokumen</div>
+            <div style={{ fontSize: 11, color: LS.mute }}>Jumlah maksimum dokumen per pengguna</div>
+          </div>
+        </div>
+        <div style={groupStyle}>
+          <label style={labelStyle}>Maks. dokumen per pengguna</label>
+          <input
+            type="number" min="1" max="999"
+            value={form.max_docs_per_user}
+            onChange={set("max_docs_per_user")}
+            style={{ ...fieldStyle, maxWidth: 120 }}
+          />
+          <span style={{ fontSize: 11, color: LS.mute, marginTop: 5 }}>
+            User yang sudah melebihi batas tidak bisa mengunggah dokumen baru.
+          </span>
+        </div>
+      </div>
+
+      {/* LLM Settings */}
+      <div style={sectionStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: 8, background: `${LS.ai}14`, color: LS.ai,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Ic name="sparkle" size={14} />
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: LS.ink }}>Konfigurasi LLM (AI Review)</div>
+            <div style={{ fontSize: 11, color: LS.mute }}>Provider dan model yang digunakan untuk review dokumen AI</div>
+          </div>
+        </div>
+
+        <div style={groupStyle}>
+          <label style={labelStyle}>Provider</label>
+          <select value={form.llm_provider} onChange={set("llm_provider")} style={fieldStyle}>
+            <option value="">— Gunakan default dari .env —</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="anthropic">Anthropic (langsung)</option>
+          </select>
+        </div>
+
+        <div style={groupStyle}>
+          <label style={labelStyle}>Model</label>
+          <input
+            type="text"
+            value={form.llm_model}
+            onChange={set("llm_model")}
+            placeholder="cth: anthropic/claude-sonnet-4.5 atau claude-sonnet-4-6"
+            style={fieldStyle}
+          />
+          <span style={{ fontSize: 11, color: LS.mute, marginTop: 5 }}>
+            Kosongkan untuk menggunakan model default provider.
+          </span>
+        </div>
+
+        <div style={groupStyle}>
+          <label style={labelStyle}>API Key</label>
+          <input
+            type="password"
+            value={form.llm_api_key}
+            onChange={set("llm_api_key")}
+            placeholder={settings?.llm_api_key === "••••••••" ? "API key tersimpan (isi untuk mengganti)" : "sk-or-... atau sk-ant-..."}
+            style={fieldStyle}
+            autoComplete="new-password"
+          />
+          {settings?.llm_api_key === "••••••••" && (
+            <span style={{ fontSize: 11, color: LS.ok, marginTop: 5 }}>
+              API key sudah dikonfigurasi. Isi field ini hanya jika ingin menggantinya.
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <Btn type="submit" variant="primary" size="md" disabled={saving}>
+          {saving ? "Menyimpan..." : "Simpan Pengaturan"}
+        </Btn>
+        {saved && (
+          <div className="ls-fade-in" style={{ fontSize: 13, color: LS.ok, fontWeight: 600 }}>
+            Tersimpan
+          </div>
+        )}
+      </div>
+    </form>
+  );
+}
+
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 function TabBar({ active, onChange }) {
   const tabs = [
     { key: "docs", label: "Dokumen", icon: "doc" },
     { key: "users", label: "Pengguna", icon: "user" },
+    { key: "settings", label: "Pengaturan", icon: "sparkle" },
   ];
   return (
     <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: `1px solid ${LS.border}`, paddingBottom: 0 }}>
@@ -373,6 +521,7 @@ export default function AdminPage() {
 
       {tab === "docs" && <DocsTab onOpenTimeline={setTimelineDoc} />}
       {tab === "users" && <UsersTab currentUserId={user?.id} />}
+      {tab === "settings" && <SettingsTab />}
 
       <TimelineModal doc={timelineDoc} onClose={() => setTimelineDoc(null)} />
 

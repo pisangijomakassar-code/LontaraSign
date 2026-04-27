@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import LoginPage from "../pages/LoginPage";
+import RegisterPage from "../pages/RegisterPage";
 import DashboardPage from "../pages/DashboardPage";
 import UploadPage from "../pages/UploadPage";
 import ReviewPage from "../pages/ReviewPage";
@@ -10,6 +11,7 @@ import ProfilePage from "../pages/ProfilePage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
+  { path: "/register", element: <RegisterPage /> },
   { path: "/", element: <DashboardPage /> },
   { path: "/upload", element: <UploadPage /> },
   { path: "/documents/:id/review", element: <ReviewPage /> },

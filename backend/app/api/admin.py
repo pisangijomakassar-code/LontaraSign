@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from app.api.deps import require_admin
 from app.core.database import get_db
 from app.core.responses import error_response, success_response
+from app.models.app_setting import AppSetting
 from app.models.document import Document
 from app.models.log import DocumentLog
 from app.models.review import DocumentReview
@@ -17,6 +18,14 @@ from app.models.user import User
 class PatchUserRequest(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
+
+
+SETTING_DEFAULTS: Dict[str, str] = {
+    "max_docs_per_user": "3",
+    "llm_provider": "",
+    "llm_model": "",
+    "llm_api_key": "",
+}
 
 router = APIRouter()
 
@@ -180,3 +189,36 @@ def admin_document_timeline(
         }
         for log in logs
     ]})
+
+
+@router.get("/settings")
+def admin_get_settings(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    rows = {r.key: r.value for r in db.scalars(select(AppSetting)).all()}
+    result = {}
+    for k, default in SETTING_DEFAULTS.items():
+        val = rows.get(k, default) or default
+        result[k] = "••••••••" if k == "llm_api_key" and val else val
+    return success_response("Pengaturan sistem", result)
+
+
+@router.patch("/settings")
+def admin_patch_settings(
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    for k, v in payload.items():
+        if k not in SETTING_DEFAULTS:
+            continue
+        if k == "llm_api_key" and v == "••••••••":
+            continue
+        row = db.scalar(select(AppSetting).where(AppSetting.key == k))
+        if row:
+            row.value = str(v) if v is not None else ""
+        else:
+            db.add(AppSetting(key=k, value=str(v) if v is not None else ""))
+    db.commit()
+    return success_response("Pengaturan disimpan", {})

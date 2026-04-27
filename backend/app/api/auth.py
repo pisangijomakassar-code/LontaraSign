@@ -16,6 +16,12 @@ from app.utils.helpers import hash_password, verify_password
 from app.core.limiter import limiter
 
 
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+
 class PatchMeRequest(BaseModel):
     name: Optional[str] = None
     title: Optional[str] = None
@@ -32,6 +38,34 @@ def _org_dict(db: Session, org_id):
     if not org:
         return None
     return {"id": org.id, "name": org.name, "slug": org.slug, "logo_url": org.logo_url}
+
+
+@router.post("/register")
+@limiter.limit("5/minute")
+def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)):
+    name = payload.name.strip()
+    email = payload.email.lower().strip()
+    if len(name) < 2:
+        return error_response(400, "Nama harus minimal 2 karakter")
+    if len(payload.password) < 6:
+        return error_response(400, "Password minimal 6 karakter")
+    if db.scalar(select(User).where(User.email == email)):
+        return error_response(400, "Email sudah terdaftar")
+    user = User(
+        name=name,
+        email=email,
+        password_hash=hash_password(payload.password),
+        role="user",
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    token = issue_token(user.id)
+    return success_response("Akun berhasil dibuat", {
+        "token": token,
+        "user": _user_dict(user, db),
+    })
 
 
 @router.post("/login")

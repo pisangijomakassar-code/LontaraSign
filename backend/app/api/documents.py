@@ -1,12 +1,13 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.responses import error_response, success_response
+from app.models.app_setting import AppSetting
 from app.models.document import Document
 from app.models.review import DocumentReview
 from app.models.signature import DocumentSignature
@@ -26,6 +27,14 @@ async def upload_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    limit_row = db.scalar(select(AppSetting).where(AppSetting.key == "max_docs_per_user"))
+    max_docs = int(limit_row.value) if limit_row and limit_row.value and limit_row.value.isdigit() else 3
+    user_doc_count = db.scalar(
+        select(func.count()).select_from(Document).where(Document.uploaded_by == current_user.id)
+    )
+    if user_doc_count >= max_docs:
+        return error_response(403, f"Batas maksimum {max_docs} dokumen per pengguna telah tercapai. Hubungi administrator.")
+
     doc_code = generate_document_code()
     file_path, original_name = await save_uploaded_pdf(file, doc_code)
 

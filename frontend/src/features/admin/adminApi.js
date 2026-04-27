@@ -9,3 +9,12 @@ export const adminGetTimeline = (id) => apiRequest(`/admin/documents/${id}/timel
 export const adminListUsers = () => apiRequest("/admin/users");
 export const adminPatchUser = (id, payload) =>
   apiRequest(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+
+export const adminGetSettings = () => apiRequest("/admin/settings");
+
+export const adminPatchSettings = (payload) =>
+  apiRequest("/admin/settings", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });

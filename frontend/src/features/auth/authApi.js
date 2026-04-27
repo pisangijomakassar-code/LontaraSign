@@ -7,6 +7,13 @@ export const login = (payload) =>
     body: JSON.stringify(payload),
   });
 
+export const register = (payload) =>
+  apiRequest("/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
 export const getMe = () => apiRequest("/auth/me");
 
 export const updateMe = (payload) =>
