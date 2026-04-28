@@ -56,24 +56,23 @@ def register(request: Request, payload: RegisterRequest, db: Session = Depends(g
         email=email,
         password_hash=hash_password(payload.password),
         role="user",
-        is_active=True,
+        is_active=False,
     )
     db.add(user)
     db.commit()
-    db.refresh(user)
-    token = issue_token(user.id)
-    return success_response("Akun berhasil dibuat", {
-        "token": token,
-        "user": _user_dict(user, db),
+    return success_response("Pendaftaran berhasil. Akun Anda sedang menunggu aktivasi oleh administrator.", {
+        "pending": True,
     })
 
 
 @router.post("/login")
 @limiter.limit("10/minute")
 def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(User.email == payload.email, User.is_active == True))
+    user = db.scalar(select(User).where(User.email == payload.email))
     if not user or not verify_password(payload.password, user.password_hash):
         return error_response(401, "Email atau password salah")
+    if not user.is_active:
+        return error_response(403, "Akun Anda belum diaktifkan. Hubungi administrator.")
     token = issue_token(user.id)
     return success_response("Login berhasil", {
         "token": token,

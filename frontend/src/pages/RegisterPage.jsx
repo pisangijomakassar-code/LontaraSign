@@ -9,10 +9,11 @@ import { LoginHeroIllustration } from "../design/illustrations";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { saveAuth, isAuthenticated } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
 
   if (isAuthenticated) {
     navigate("/", { replace: true });
@@ -28,9 +29,8 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      const res = await register({ name: form.name, email: form.email, password: form.password });
-      saveAuth(res.data.token, res.data.user);
-      navigate("/");
+      await register({ name: form.name, email: form.email, password: form.password });
+      setDone(true);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -59,77 +59,107 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <h1 style={{
-            fontSize: 28, fontWeight: 700, color: LS.ink, letterSpacing: -0.8,
-            marginBottom: 8, lineHeight: 1.15,
-          }}>
-            Buat akun baru
-          </h1>
-          <p style={{ fontSize: 14, color: LS.mute, marginBottom: 28, lineHeight: 1.55 }}>
-            Bergabung dan mulai kelola dokumen dengan tanda tangan digital.
-          </p>
-
-          {error && (
-            <div className="ls-fade-in" style={{
-              background: LS.dangerSoft, border: `1px solid ${LS.danger}33`,
-              color: LS.danger, borderRadius: 12, padding: "10px 14px",
-              fontSize: 13, marginBottom: 18,
-            }}>
-              {error}
+          {done ? (
+            <div className="ls-fade-up" style={{ textAlign: "center" }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: "50%", background: LS.okSoft,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                margin: "0 auto 20px",
+              }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                  <path d="M20 6L9 17L4 12" stroke={LS.ok} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <h2 style={{ fontSize: 22, fontWeight: 700, color: LS.ink, marginBottom: 10 }}>
+                Pendaftaran Dikirim!
+              </h2>
+              <p style={{ fontSize: 14, color: LS.mute, lineHeight: 1.65, marginBottom: 28 }}>
+                Akun untuk <strong style={{ color: LS.inkSoft }}>{form.email}</strong> berhasil dibuat
+                dan sedang menunggu aktivasi oleh administrator.
+                <br /><br />
+                Anda akan bisa masuk setelah admin mengaktifkan akun Anda.
+              </p>
+              <Link to="/login" style={{
+                display: "inline-block", padding: "10px 24px",
+                background: LS.brand, color: "#fff", borderRadius: 10,
+                fontWeight: 600, fontSize: 14, textDecoration: "none",
+              }}>
+                Kembali ke halaman masuk
+              </Link>
             </div>
+          ) : (
+            <>
+              <h1 style={{
+                fontSize: 28, fontWeight: 700, color: LS.ink, letterSpacing: -0.8,
+                marginBottom: 8, lineHeight: 1.15,
+              }}>
+                Buat akun baru
+              </h1>
+              <p style={{ fontSize: 14, color: LS.mute, marginBottom: 28, lineHeight: 1.55 }}>
+                Bergabung dan mulai kelola dokumen dengan tanda tangan digital.
+              </p>
+
+              {error && (
+                <div className="ls-fade-in" style={{
+                  background: LS.dangerSoft, border: `1px solid ${LS.danger}33`,
+                  color: LS.danger, borderRadius: 12, padding: "10px 14px",
+                  fontSize: 13, marginBottom: 18,
+                }}>
+                  {error}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <Input
+                  label="Nama Lengkap"
+                  type="text"
+                  value={form.name}
+                  onChange={set("name")}
+                  placeholder="Nama Anda"
+                  icon="user"
+                  required
+                  autoFocus
+                />
+                <Input
+                  label="Email"
+                  type="email"
+                  value={form.email}
+                  onChange={set("email")}
+                  placeholder="nama@contoh.com"
+                  icon="mail"
+                  required
+                />
+                <Input
+                  label="Password"
+                  type="password"
+                  value={form.password}
+                  onChange={set("password")}
+                  placeholder="Minimal 6 karakter"
+                  icon="lock"
+                  required
+                />
+                <Input
+                  label="Konfirmasi Password"
+                  type="password"
+                  value={form.confirm}
+                  onChange={set("confirm")}
+                  placeholder="Ulangi password"
+                  icon="lock"
+                  required
+                />
+                <Btn type="submit" variant="primary" size="lg" full disabled={loading} style={{ marginTop: 4 }}>
+                  {loading ? "Mendaftar..." : "Daftar Sekarang"}
+                </Btn>
+              </form>
+
+              <div style={{ marginTop: 20, textAlign: "center", fontSize: 13, color: LS.mute }}>
+                Sudah punya akun?{" "}
+                <Link to="/login" style={{ color: LS.brand, fontWeight: 600, textDecoration: "none" }}>
+                  Masuk
+                </Link>
+              </div>
+            </>
           )}
-
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <Input
-              label="Nama Lengkap"
-              type="text"
-              value={form.name}
-              onChange={set("name")}
-              placeholder="Nama Anda"
-              icon="user"
-              required
-              autoFocus
-            />
-            <Input
-              label="Email"
-              type="email"
-              value={form.email}
-              onChange={set("email")}
-              placeholder="nama@contoh.com"
-              icon="mail"
-              required
-            />
-            <Input
-              label="Password"
-              type="password"
-              value={form.password}
-              onChange={set("password")}
-              placeholder="Minimal 6 karakter"
-              icon="lock"
-              required
-            />
-            <Input
-              label="Konfirmasi Password"
-              type="password"
-              value={form.confirm}
-              onChange={set("confirm")}
-              placeholder="Ulangi password"
-              icon="lock"
-              required
-            />
-            <Btn type="submit" variant="primary" size="lg" full disabled={loading} style={{ marginTop: 4 }}>
-              {loading ? "Mendaftar..." : "Daftar Sekarang"}
-            </Btn>
-          </form>
-
-          <div style={{
-            marginTop: 20, textAlign: "center", fontSize: 13, color: LS.mute,
-          }}>
-            Sudah punya akun?{" "}
-            <Link to="/login" style={{ color: LS.brand, fontWeight: 600, textDecoration: "none" }}>
-              Masuk
-            </Link>
-          </div>
         </div>
       </div>
 
