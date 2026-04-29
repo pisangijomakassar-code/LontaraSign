@@ -9,6 +9,7 @@ import { Btn, Card, StatusChip, LontaraTag } from "../design/primitives";
 import { Ic } from "../design/icons";
 import { AppShell } from "../design/shell";
 import { EmptyStateIllustration } from "../design/illustrations";
+import LandingPage from "./LandingPage";
 
 function StatCard({ icon, label, value, tone = "brand", active, onClick }) {
   const accent = {
@@ -82,7 +83,7 @@ export default function DashboardPage() {
   const [activeFilter, setActiveFilter] = useState(null);
 
   useEffect(() => {
-    if (!isAuthenticated) { navigate("/login"); return; }
+    if (!isAuthenticated) { return; } // tampilkan LandingPage di-render path bawah
     (async () => {
       try {
         if (!user) {
@@ -136,6 +137,8 @@ export default function DashboardPage() {
     : docs;
 
   const toggleFilter = (key) => setActiveFilter((prev) => (prev === key ? null : key));
+
+  if (!isAuthenticated) return <LandingPage />;
 
   return (
     <AppShell
