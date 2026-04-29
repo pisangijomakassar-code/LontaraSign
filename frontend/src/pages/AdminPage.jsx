@@ -132,6 +132,7 @@ function SettingsTab() {
           <select value={form.llm_provider} onChange={set("llm_provider")} style={fieldStyle}>
             <option value="">— Gunakan default dari .env —</option>
             <option value="openrouter">OpenRouter</option>
+            <option value="openai">OpenAI (langsung)</option>
             <option value="anthropic">Anthropic (langsung)</option>
           </select>
         </div>

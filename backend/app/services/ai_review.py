@@ -73,21 +73,43 @@ async def review_document_text(text: str, db=None) -> dict:
         return _placeholder_review(text)
 
     provider_env = _db_setting(db, "llm_provider") or os.getenv("AI_PROVIDER", "").strip().lower()
-    is_openrouter = api_key.startswith("sk-or-") or provider_env == "openrouter"
-    model = _db_setting(db, "llm_model") or os.getenv("AI_MODEL", "").strip() or (
-        "anthropic/claude-sonnet-4.5" if is_openrouter else "claude-sonnet-4-6"
-    )
+    # Auto-deteksi provider dari prefix API key bila tidak di-set eksplisit:
+    #   sk-or-...   → OpenRouter
+    #   sk-ant-...  → Anthropic (langsung)
+    #   sk-...      → OpenAI (termasuk sk-proj-...)
+    if provider_env in ("openrouter", "openai", "anthropic"):
+        provider = provider_env
+    elif api_key.startswith("sk-or-"):
+        provider = "openrouter"
+    elif api_key.startswith("sk-ant-"):
+        provider = "anthropic"
+    elif api_key.startswith("sk-"):
+        provider = "openai"
+    else:
+        provider = "anthropic"
+
+    default_models = {
+        "openrouter": "anthropic/claude-sonnet-4.5",
+        "openai": "gpt-4o-mini",
+        "anthropic": "claude-sonnet-4-6",
+    }
+    model = _db_setting(db, "llm_model") or os.getenv("AI_MODEL", "").strip() or default_models[provider]
 
     try:
-        if is_openrouter:
-            # OpenRouter: OpenAI-compatible chat completions endpoint.
+        if provider in ("openrouter", "openai"):
+            # OpenAI dan OpenRouter pakai format chat completions yang sama.
             import httpx
+            base_url = (
+                "https://openrouter.ai/api/v1" if provider == "openrouter"
+                else "https://api.openai.com/v1"
+            )
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": "https://lontarasign.local",
-                "X-Title": "LontaraSign",
             }
+            if provider == "openrouter":
+                headers["HTTP-Referer"] = "https://lontarasign.local"
+                headers["X-Title"] = "LontaraSign"
             payload = {
                 "model": model,
                 "max_tokens": 4096,
@@ -95,7 +117,7 @@ async def review_document_text(text: str, db=None) -> dict:
             }
             async with httpx.AsyncClient(timeout=150) as ac:
                 resp = await ac.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
+                    f"{base_url}/chat/completions",
                     headers=headers, json=payload,
                 )
                 resp.raise_for_status()
