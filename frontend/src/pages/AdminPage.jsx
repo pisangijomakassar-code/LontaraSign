@@ -183,10 +183,10 @@ function SettingsTab() {
 }
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
-function TabBar({ active, onChange }) {
+function TabBar({ active, onChange, pendingUsers = 0 }) {
   const tabs = [
     { key: "docs", label: "Dokumen", icon: "doc" },
-    { key: "users", label: "Pengguna", icon: "user" },
+    { key: "users", label: "Pengguna", icon: "user", badge: pendingUsers },
     { key: "settings", label: "Pengaturan", icon: "sparkle" },
   ];
   return (
@@ -202,6 +202,12 @@ function TabBar({ active, onChange }) {
         }}>
           <Ic name={t.icon} size={14} />
           {t.label}
+          {t.badge > 0 && (
+            <span style={{
+              background: LS.warn, color: "#fff", borderRadius: 99,
+              fontSize: 10, fontWeight: 700, padding: "1px 6px", lineHeight: 1.6,
+            }}>{t.badge}</span>
+          )}
         </button>
       ))}
     </div>
@@ -348,13 +354,30 @@ function UsersTab({ currentUserId }) {
     </Card>
   );
 
+  const pendingList = users.filter((u) => !u.is_active);
+  const activeList = users.filter((u) => u.is_active);
+
   return (
+    <div>
+      {pendingList.length > 0 && (
+        <div className="ls-fade-in" style={{
+          background: LS.warnSoft, border: `1px solid ${LS.warn}33`,
+          borderRadius: 12, padding: "12px 16px", marginBottom: 12,
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <Ic name="user" size={15} color={LS.warn} />
+          <span style={{ fontSize: 13, color: LS.warn, fontWeight: 600 }}>
+            {pendingList.length} pengguna menunggu aktivasi
+          </span>
+          <span style={{ fontSize: 12, color: LS.inkSoft }}>— aktifkan melalui tombol di bawah</span>
+        </div>
+      )}
     <Card pad={0} style={{ overflow: "hidden" }}>
       <div style={{
         padding: "12px 16px", borderBottom: `1px solid ${LS.border}`,
         fontSize: 12, color: LS.mute,
       }}>
-        {users.length} pengguna dalam organisasi
+        {activeList.length} pengguna aktif{pendingList.length > 0 ? `, ${pendingList.length} menunggu aktivasi` : ""}
       </div>
       {users.map((u) => {
         const isSelf = u.id === currentUserId;
@@ -420,6 +443,7 @@ function UsersTab({ currentUserId }) {
         );
       })}
     </Card>
+    </div>
   );
 }
 
@@ -515,9 +539,10 @@ export default function AdminPage() {
         <StatCard icon="pen" label="Menunggu TTD" value={stats?.pending_sign} tone="warn" />
         <StatCard icon="user" label="Total User" value={stats?.total_users} tone="slate" />
         <StatCard icon="checkCircle" label="User Aktif" value={stats?.active_users} tone="ok" />
+        <StatCard icon="user" label="Menunggu Aktivasi" value={stats?.pending_users ?? 0} tone={stats?.pending_users > 0 ? "warn" : "slate"} />
       </div>
 
-      <TabBar active={tab} onChange={setTab} />
+      <TabBar active={tab} onChange={setTab} pendingUsers={stats?.pending_users ?? 0} />
 
       {tab === "docs" && <DocsTab onOpenTimeline={setTimelineDoc} />}
       {tab === "users" && <UsersTab currentUserId={user?.id} />}

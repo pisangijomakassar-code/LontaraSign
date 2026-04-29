@@ -43,6 +43,8 @@ def admin_stats(
 
     docs = db.scalars(doc_q).all()
     users = db.scalars(user_q).all()
+    # Pending users = semua user tidak aktif (global, tidak filter org)
+    pending_users = db.scalars(select(User).where(User.is_active == False)).all()
 
     return success_response("Statistik admin", {
         "total_documents": len(docs),
@@ -51,6 +53,7 @@ def admin_stats(
         "in_review": sum(1 for d in docs if d.status in ("draft_uploaded", "reviewed_by_ai", "needs_revision")),
         "total_users": len(users),
         "active_users": sum(1 for u in users if u.is_active),
+        "pending_users": len(pending_users),
     })
 
 
@@ -59,9 +62,12 @@ def admin_list_users(
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    q = select(User).order_by(User.created_at.asc())
+    q = select(User).order_by(User.is_active.asc(), User.created_at.asc())
     if admin.organization_id:
-        q = q.where(User.organization_id == admin.organization_id)
+        # Tampilkan user org sendiri + user pending (tanpa org) yang perlu diaktivasi
+        q = q.where(
+            (User.organization_id == admin.organization_id) | (User.is_active == False)
+        )
     users = db.scalars(q).all()
     doc_counts = {}
     for doc in db.scalars(select(Document)).all():
