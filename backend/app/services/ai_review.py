@@ -154,7 +154,10 @@ async def review_document_text(text: str, db=None) -> dict:
             if m:
                 raw = m.group(0)
 
-        data = json.loads(raw)
+        # strict=False: izinkan control character (mis. newline literal) di dalam string —
+        # beberapa LLM masukkan \n langsung tanpa escape, dan kita lebih baik menerima
+        # output mentah daripada menggagalkan seluruh review.
+        data = json.loads(raw, strict=False)
         items = data.get("items", [])
         normalised = []
         for item in items:
