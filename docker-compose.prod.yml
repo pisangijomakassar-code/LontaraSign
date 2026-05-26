@@ -5,6 +5,7 @@ services:
     image: mysql:8.0
     container_name: lontarasign_mysql
     restart: always
+    env_file: [.env]
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE:      ${MYSQL_DATABASE}
@@ -31,6 +32,7 @@ services:
     volumes:
       - storage_data:/app/storage
     networks: [lontarasign_net]
+    mem_limit: 256m
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
 
   frontend:
@@ -39,8 +41,9 @@ services:
     restart: always
     depends_on: [backend]
     ports:
-      - "8080:80"
+      - "80:80"
     networks: [lontarasign_net]
+    mem_limit: 64m
 
 volumes:
   mysql_data:
