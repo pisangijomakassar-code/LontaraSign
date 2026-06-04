@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { QRCodeSVG } from "qrcode.react";
 import { downloadSignedDocument } from "../features/signature/signatureApi";
 import { shareDocument, getLogs, getShareHistory } from "../features/share/shareApi";
 import { getDocument } from "../features/documents/documentsApi";
@@ -12,36 +13,17 @@ import { AppShell } from "../design/shell";
 import { ConfettiBurst, AnimatedCheck, BugisSeal } from "../design/illustrations";
 import { Stepper, ModalShell } from "../design/ui-pieces";
 
-function FauxQR({ value = "LS", size = 140 }) {
-  // Deterministic pseudo-random grid derived from value
-  const n = 16;
-  const cells = [];
-  let seed = value.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  for (let i = 0; i < n * n; i++) {
-    seed = (seed * 9301 + 49297) % 233280;
-    cells.push(seed / 233280 > 0.55 ? 1 : 0);
-  }
-  // Corner finders
-  const isCorner = (r, c) =>
-    (r < 3 && c < 3) || (r < 3 && c > n - 4) || (r > n - 4 && c < 3);
+// QR asli (scannable) menuju URL verifikasi publik. Kosong → placeholder.
+function VerifyQR({ url, size = 130 }) {
   return (
     <div style={{
       width: size, height: size, padding: 8, background: "#fff",
       border: `1px solid ${LS.border}`, borderRadius: 10,
-      boxShadow: LS.shadowSm, position: "relative",
-    }} className="ls-qr-scan">
-      <div style={{
-        width: "100%", height: "100%",
-        display: "grid", gridTemplateColumns: `repeat(${n}, 1fr)`, gap: 0,
-      }}>
-        {cells.map((c, i) => {
-          const r = Math.floor(i / n), cc = i % n;
-          const on = isCorner(r, cc)
-            ? (r === 0 || r === n - 1 || r === 2 || cc === 0 || cc === n - 1 || cc === 2)
-            : c;
-          return <div key={i} style={{ background: on ? LS.ink : "transparent" }} />;
-        })}
-      </div>
+      boxShadow: LS.shadowSm, display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      {url
+        ? <QRCodeSVG value={url} size={size - 16} level="M" />
+        : <span style={{ fontSize: 10, color: LS.mute }}>QR</span>}
     </div>
   );
 }
@@ -110,8 +92,30 @@ export default function ResultPage() {
     } finally { setSharing(false); }
   };
 
-  const copyVerifyUrl = () => {
-    navigator.clipboard.writeText(verifyUrl).catch(() => {});
+  // Copy yang jalan di HTTP non-secure context (navigator.clipboard cuma ada di HTTPS/localhost)
+  const copyText = async (text) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (_) { /* fall through ke fallback */ }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch (_) { return false; }
+  };
+
+  const copyVerifyUrl = async () => {
+    await copyText(verifyUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -126,7 +130,7 @@ export default function ResultPage() {
       const res = await shareDocument(id, payload);
       if (shareTab === "link") {
         const url = res.data?.verify_url || verifyUrl;
-        navigator.clipboard.writeText(url).catch(() => {});
+        await copyText(url);
         setShareMsg("Link telah disalin ke clipboard.");
       } else if (shareTab === "email") {
         setShareMsg(`Permintaan kirim ke ${shareEmail} tercatat.`);
@@ -141,7 +145,8 @@ export default function ResultPage() {
     }
   };
 
-  const verifyUrl = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1"}/verify/${id}`;
+  // Public verify URL — halaman frontend (bukan API), pakai document_code, origin runtime
+  const verifyUrl = doc ? `${window.location.origin}/verify/${doc.document_code}` : "";
 
   if (loading) {
     return (
@@ -220,7 +225,7 @@ export default function ResultPage() {
               Verifikasi Publik
             </div>
             <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-              <FauxQR value={doc?.document_code || "LS"} size={130} />
+              <VerifyQR url={verifyUrl} size={130} />
               <div style={{ flex: 1, minWidth: 180 }}>
                 <div style={{ fontSize: 12, color: LS.mute, marginBottom: 4 }}>URL Verifikasi:</div>
                 <div style={{

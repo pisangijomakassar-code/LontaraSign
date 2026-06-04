@@ -40,7 +40,8 @@ def share_document(
     db.commit()
     db.refresh(share)
 
-    verify_url = f"{APP_BASE_URL}/api/v1/verify/{doc_id}"
+    # Halaman verifikasi publik (frontend), pakai document_code — bukan endpoint API
+    verify_url = f"{APP_BASE_URL}/verify/{doc.document_code}"
     log_action(
         db, doc_id, current_user.name, current_user.role, "share",
         actor_id=current_user.id,
