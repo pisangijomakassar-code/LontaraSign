@@ -1,0 +1,39 @@
+name: Deploy LontaraSign (PMD)
+
+# Auto-deploy ke server PMD Kalla (10.11.3.190) via self-hosted runner.
+# Runner berjalan DI server itu sendiri (koneksi keluar ke GitHub), jadi
+# tidak butuh akses masuk lewat firewall internal Kalla.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}   # bisa trigger manual dari tab Actions
+
+concurrency:
+  group: deploy-pmd
+  cancel-in-progress: false   # jangan batalkan deploy yang sedang jalan
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, pmd]
+    steps:
+      - name: Pull kode terbaru
+        run: |
+          cd /home/pm-budirman/lontarasign
+          git fetch origin main
+          git reset --hard origin/main
+          echo "HEAD sekarang: $(git rev-parse --short HEAD)"
+
+      - name: Build & restart container
+        run: |
+          cd /home/pm-budirman/lontarasign
+          docker compose -f docker-compose.prod.yml build
+          docker compose -f docker-compose.prod.yml up -d
+          docker compose -f docker-compose.prod.yml ps
+
+      - name: Smoke test
+        run: |
+          sleep 5
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost/)
+          echo "Frontend HTTP: $code"
+          test "$code" = "200" || (echo "SMOKE TEST GAGAL" && exit 1)
