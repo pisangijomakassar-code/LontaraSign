@@ -8,6 +8,7 @@ import SignPage from "../pages/SignPage";
 import ResultPage from "../pages/ResultPage";
 import AdminPage from "../pages/AdminPage";
 import ProfilePage from "../pages/ProfilePage";
+import VerifyPage from "../pages/VerifyPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -19,5 +20,6 @@ export const router = createBrowserRouter([
   { path: "/documents/:id/result", element: <ResultPage /> },
   { path: "/admin", element: <AdminPage /> },
   { path: "/profile", element: <ProfilePage /> },
+  { path: "/verify/:code", element: <VerifyPage /> },
   { path: "*", element: <Navigate to="/" replace /> },
 ]);

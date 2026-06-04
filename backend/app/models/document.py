@@ -16,6 +16,7 @@ class Document(Base):
     title: Mapped[str] = mapped_column(String(255))
     original_file_name: Mapped[str] = mapped_column(String(255))
     original_file_path: Mapped[str] = mapped_column(String(500))
+    document_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     uploaded_by: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(
         Enum("draft_uploaded", "reviewed_by_ai", "needs_revision", "approved", "pending_sign", "signed"),

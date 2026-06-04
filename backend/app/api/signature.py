@@ -17,6 +17,7 @@ from app.schemas.signature import DrawSignatureRequest, SignFinalizeRequest
 from app.services.file_service import save_base64_signature, save_signature_image_upload
 from app.services.log_service import log_action
 from app.services.pdf_service import embed_signature_to_pdf, render_page_to_png
+from app.services.certificate_service import append_certificate_page
 
 router = APIRouter()
 
@@ -86,6 +87,22 @@ def finalize_sign(
         )
     except Exception as e:
         error_response(500, f"Gagal menempel tanda tangan ke PDF: {str(e)}")
+
+    # Append certificate page
+    try:
+        from datetime import datetime as _dt
+        append_certificate_page(
+            pdf_path=output_path,
+            document_code=doc.document_code,
+            document_title=doc.title,
+            document_hash=doc.document_hash or "-",
+            signer_name=current_user.name,
+            signer_email=current_user.email,
+            signer_title=current_user.title or "",
+            signed_at=_dt.utcnow(),
+        )
+    except Exception as cert_err:
+        pass  # Certificate generation failure should not block signing
 
     # Normalize sign_method — DB ENUM only accepts 'draw' or 'upload'.
     # Anything else (including legacy 'saved' from older frontend builds) maps to 'draw'.

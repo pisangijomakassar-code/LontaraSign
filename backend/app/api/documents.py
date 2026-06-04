@@ -14,6 +14,7 @@ from app.models.signature import DocumentSignature
 from app.models.share import DocumentShare
 from app.models.user import User
 from app.services.file_service import save_uploaded_pdf
+from app.services.certificate_service import compute_sha256
 from app.services.log_service import log_action
 from app.utils.helpers import generate_document_code
 
@@ -46,6 +47,7 @@ async def upload_document(
         title=doc_title,
         original_file_name=original_name,
         original_file_path=file_path,
+        document_hash=compute_sha256(file_path),
         uploaded_by=current_user.id,
         status="draft_uploaded",
         current_version_label="v1",

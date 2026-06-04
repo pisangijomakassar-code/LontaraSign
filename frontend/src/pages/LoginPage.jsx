@@ -57,13 +57,10 @@ export default function LoginPage() {
             fontSize: 30, fontWeight: 700, color: LS.ink, letterSpacing: -0.8,
             marginBottom: 8, lineHeight: 1.15,
           }}>
-            Tabe', masuk ke akun Anda
+            Masuk ke LontaraSign
           </h1>
-          <p style={{ fontSize: 14, color: LS.mute, marginBottom: 32, lineHeight: 1.55 }}>
-            <em style={{ fontStyle: "normal", color: LS.bugisGold, fontWeight: 600 }}>
-              Resopa temmangingngi namalomo naletei pammase Dewata
-            </em><br />
-            <span style={{ fontSize: 12 }}>— Ketekunan akan membuka jalan restu.</span>
+          <p style={{ fontSize: 13, color: LS.mute, marginBottom: 32 }}>
+            Platform tanda tangan digital berstandar UU ITE
           </p>
 
           {error && (
@@ -117,7 +114,7 @@ export default function LoginPage() {
             <div>
               <div style={{ fontWeight: 600 }}>Akun demo</div>
               <div style={{ color: LS.mute, marginTop: 2 }}>
-                nadia@lontarasign.local / password123
+                admin@lontarasign.id / Admin123!
               </div>
             </div>
           </div>
