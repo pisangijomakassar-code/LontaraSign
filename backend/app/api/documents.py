@@ -1,7 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -12,6 +12,7 @@ from app.models.document import Document
 from app.models.review import DocumentReview
 from app.models.signature import DocumentSignature
 from app.models.share import DocumentShare
+from app.models.log import DocumentLog
 from app.models.user import User
 from app.services.file_service import save_uploaded_pdf
 from app.services.certificate_service import compute_sha256
@@ -19,6 +20,50 @@ from app.services.log_service import log_action
 from app.utils.helpers import generate_document_code
 
 router = APIRouter()
+
+DEFAULT_KEEP_RECENT = 10  # app hanya simpan N dokumen terakhir per pengguna
+
+
+def _prune_old_documents(db: Session, user_id: int, keep: int) -> int:
+    """Simpan `keep` dokumen terbaru milik user, hapus sisanya (rolling window).
+
+    Menghapus baris anak (signature/review/log/share) + file storage terkait.
+    Scoped per `uploaded_by` — tidak menyentuh dokumen pengguna lain.
+    """
+    import os
+
+    old_docs = db.scalars(
+        select(Document)
+        .where(Document.uploaded_by == user_id)
+        .order_by(Document.id.desc())
+        .offset(keep)
+    ).all()
+    if not old_docs:
+        return 0
+
+    file_paths = []
+    for d in old_docs:
+        if d.original_file_path:
+            file_paths.append(d.original_file_path)
+        for s in db.scalars(
+            select(DocumentSignature).where(DocumentSignature.document_id == d.id)
+        ).all():
+            file_paths += [p for p in (s.sign_image_path, s.signed_pdf_path) if p]
+
+        db.query(DocumentSignature).filter(DocumentSignature.document_id == d.id).delete()
+        db.query(DocumentReview).filter(DocumentReview.document_id == d.id).delete()
+        db.query(DocumentLog).filter(DocumentLog.document_id == d.id).delete()
+        db.query(DocumentShare).filter(DocumentShare.document_id == d.id).delete()
+        db.delete(d)
+    db.commit()
+
+    # Hapus file setelah commit DB sukses (kalau gagal, baris sudah hilang—file orphan tak fatal)
+    for p in file_paths:
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+    return len(old_docs)
 
 
 @router.post("/upload")
@@ -28,13 +73,10 @@ async def upload_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    limit_row = db.scalar(select(AppSetting).where(AppSetting.key == "max_docs_per_user"))
-    max_docs = int(limit_row.value) if limit_row and limit_row.value and limit_row.value.isdigit() else 3
-    user_doc_count = db.scalar(
-        select(func.count()).select_from(Document).where(Document.uploaded_by == current_user.id)
-    )
-    if user_doc_count >= max_docs:
-        return error_response(403, f"Batas maksimum {max_docs} dokumen per pengguna telah tercapai. Hubungi administrator.")
+    # App menyimpan N dokumen terbaru per pengguna; dokumen lama otomatis dihapus
+    # (rolling window) — tidak memblokir upload. Override via setting 'keep_recent_docs'.
+    keep_row = db.scalar(select(AppSetting).where(AppSetting.key == "keep_recent_docs"))
+    keep_recent = int(keep_row.value) if keep_row and keep_row.value and keep_row.value.isdigit() else DEFAULT_KEEP_RECENT
 
     doc_code = generate_document_code()
     file_path, original_name = await save_uploaded_pdf(file, doc_code)
@@ -61,6 +103,12 @@ async def upload_document(
         actor_id=current_user.id,
         description=f"Dokumen '{doc_title}' diunggah",
     )
+
+    # Rolling window: simpan `keep_recent` dokumen terbaru, hapus yang lama
+    try:
+        _prune_old_documents(db, current_user.id, keep_recent)
+    except Exception:
+        pass  # Prune gagal tidak boleh memblokir upload yang sudah sukses
 
     return success_response("Dokumen berhasil diunggah", _doc_dict(doc))
 
