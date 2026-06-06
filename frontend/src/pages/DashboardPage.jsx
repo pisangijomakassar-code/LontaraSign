@@ -81,6 +81,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeFilter, setActiveFilter] = useState(null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     if (!isAuthenticated) { return; } // tampilkan LandingPage di-render path bawah
@@ -132,9 +133,12 @@ export default function DashboardPage() {
     reviewing: ["draft_uploaded", "reviewed_by_ai", "needs_revision"],
   };
 
-  const visibleDocs = activeFilter
-    ? docs.filter((d) => filterMap[activeFilter]?.includes(d.status))
-    : docs;
+  const q = query.trim().toLowerCase();
+  const visibleDocs = docs
+    .filter((d) => (activeFilter ? filterMap[activeFilter]?.includes(d.status) : true))
+    .filter((d) => !q
+      || (d.title || "").toLowerCase().includes(q)
+      || (d.document_code || "").toLowerCase().includes(q));
 
   const toggleFilter = (key) => setActiveFilter((prev) => (prev === key ? null : key));
 
@@ -170,14 +174,43 @@ export default function DashboardPage() {
       {/* Document list */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        marginBottom: 12,
+        marginBottom: 12, gap: 12, flexWrap: "wrap",
       }}>
         <h2 style={{ fontSize: 14, fontWeight: 700, color: LS.inkSoft,
                      letterSpacing: 0.3, textTransform: "uppercase", margin: 0 }}>
           Dokumen Saya
         </h2>
-        <div style={{ fontSize: 12, color: LS.mute }}>{visibleDocs.length} dokumen{activeFilter ? " (difilter)" : ""}</div>
+        <div style={{ fontSize: 12, color: LS.mute }}>{visibleDocs.length} dokumen{(activeFilter || q) ? " (difilter)" : ""}</div>
       </div>
+
+      {docs.length > 0 && (
+        <div style={{ position: "relative", marginBottom: 12 }}>
+          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
+                         color: LS.muteSoft, display: "flex", pointerEvents: "none" }}>
+            <Ic name="search" size={16} />
+          </span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Cari dokumen — judul atau kode…"
+            style={{
+              width: "100%", boxSizing: "border-box",
+              padding: "10px 36px 10px 36px", fontSize: 13,
+              border: `1px solid ${LS.border}`, borderRadius: 10,
+              background: LS.surface, color: LS.ink, fontFamily: LS.font, outline: "none",
+            }}
+          />
+          {query && (
+            <button onClick={() => setQuery("")} style={{
+              position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+              background: "none", border: "none", cursor: "pointer", color: LS.mute,
+              display: "flex", padding: 4,
+            }} aria-label="Bersihkan pencarian">
+              <Ic name="x" size={15} />
+            </button>
+          )}
+        </div>
+      )}
 
       {error && (
         <div style={{
@@ -208,6 +241,21 @@ export default function DashboardPage() {
                 Unggah Dokumen Pertama
               </Btn>
             </div>
+          </div>
+        </Card>
+      ) : visibleDocs.length === 0 ? (
+        <Card pad={28}>
+          <div style={{ textAlign: "center", color: LS.mute, fontSize: 13 }}>
+            Tidak ada dokumen yang cocok
+            {q && <> dengan "<strong style={{ color: LS.inkSoft }}>{query}</strong>"</>}.
+            {(activeFilter || q) && (
+              <div style={{ marginTop: 10 }}>
+                <button onClick={() => { setQuery(""); setActiveFilter(null); }} style={{
+                  background: "none", border: `1px solid ${LS.border}`, borderRadius: 8,
+                  padding: "6px 12px", fontSize: 12, color: LS.brand, cursor: "pointer", fontWeight: 600,
+                }}>Reset filter</button>
+              </div>
+            )}
           </div>
         </Card>
       ) : (
