@@ -36,6 +36,46 @@ function StatCard({ icon, label, value, tone = "brand" }) {
   );
 }
 
+// ── Settings helpers ────────────────────────────────────────────────────────
+function Toggle({ on, onChange }) {
+  return (
+    <button type="button" onClick={() => onChange(!on)} style={{
+      width: 42, height: 24, borderRadius: 999, border: "none", cursor: "pointer",
+      background: on ? LS.ok : LS.borderStrong, position: "relative", transition: "background .15s", flexShrink: 0,
+    }} aria-pressed={on}>
+      <span style={{
+        position: "absolute", top: 3, left: on ? 21 : 3, width: 18, height: 18,
+        borderRadius: "50%", background: "#fff", transition: "left .15s",
+      }} />
+    </button>
+  );
+}
+
+function SoonBadge() {
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 700, color: LS.warn, background: LS.warnSoft,
+      border: `1px solid ${LS.warn}33`, borderRadius: 6, padding: "2px 7px", letterSpacing: 0.3,
+    }}>KONFIG SAJA</span>
+  );
+}
+
+function SectionHead({ icon, tone, title, desc, right }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+      <div style={{
+        width: 30, height: 30, borderRadius: 8, background: `${tone}14`, color: tone,
+        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+      }}><Ic name={icon} size={14} /></div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: LS.ink }}>{title}</div>
+        <div style={{ fontSize: 11, color: LS.mute }}>{desc}</div>
+      </div>
+      {right}
+    </div>
+  );
+}
+
 // ── Settings tab ──────────────────────────────────────────────────────────────
 function SettingsTab() {
   const [settings, setSettings] = useState(null);
@@ -51,6 +91,8 @@ function SettingsTab() {
   }, []);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setVal = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const isOn = (k) => form[k] === "true" || form[k] === true;
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -84,30 +126,21 @@ function SettingsTab() {
 
   return (
     <form onSubmit={handleSave}>
-      {/* Batas Dokumen */}
+      {/* Penyimpanan Dokumen (rolling window) */}
       <div style={sectionStyle}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-          <div style={{
-            width: 30, height: 30, borderRadius: 8, background: `${LS.brand}14`, color: LS.brand,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Ic name="doc" size={14} />
-          </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: LS.ink }}>Batas Dokumen</div>
-            <div style={{ fontSize: 11, color: LS.mute }}>Jumlah maksimum dokumen per pengguna</div>
-          </div>
-        </div>
+        <SectionHead icon="doc" tone={LS.brand} title="Penyimpanan Dokumen"
+          desc="Berapa dokumen terbaru yang disimpan per pengguna" />
         <div style={groupStyle}>
-          <label style={labelStyle}>Maks. dokumen per pengguna</label>
+          <label style={labelStyle}>Simpan N dokumen terbaru</label>
           <input
             type="number" min="1" max="999"
-            value={form.max_docs_per_user}
-            onChange={set("max_docs_per_user")}
+            value={form.keep_recent_docs}
+            onChange={set("keep_recent_docs")}
             style={{ ...fieldStyle, maxWidth: 120 }}
           />
           <span style={{ fontSize: 11, color: LS.mute, marginTop: 5 }}>
-            User yang sudah melebihi batas tidak bisa mengunggah dokumen baru.
+            Tiap unggah, dokumen di luar {form.keep_recent_docs || "N"} terbaru otomatis dihapus
+            (rolling window). Tidak memblokir upload.
           </span>
         </div>
       </div>
@@ -167,6 +200,111 @@ function SettingsTab() {
             </span>
           )}
         </div>
+      </div>
+
+      {/* OTP saat tanda tangan */}
+      <div style={sectionStyle}>
+        <SectionHead icon="pen" tone={LS.bugisGold} title="OTP saat Tanda Tangan"
+          desc="Kirim kode verifikasi ke penanda tangan sebelum sign (naik ke standar AES)"
+          right={<div style={{ display: "flex", alignItems: "center", gap: 8 }}><SoonBadge /><Toggle on={isOn("otp_enabled")} onChange={(v) => setVal("otp_enabled", v ? "true" : "false")} /></div>}
+        />
+        {isOn("otp_enabled") && (
+          <>
+            <div style={groupStyle}>
+              <label style={labelStyle}>Kirim OTP ke mana?</label>
+              <select value={form.otp_channel} onChange={set("otp_channel")} style={fieldStyle}>
+                <option value="email">Email</option>
+                <option value="whatsapp">WhatsApp</option>
+              </select>
+            </div>
+
+            {form.otp_channel === "email" ? (
+              <>
+                <div style={groupStyle}>
+                  <label style={labelStyle}>Email pengirim (From)</label>
+                  <input type="email" value={form.otp_email_from} onChange={set("otp_email_from")}
+                    placeholder="no-reply@kalla.co.id" style={fieldStyle} />
+                </div>
+                <div style={{ display: "flex", gap: 12 }}>
+                  <div style={{ ...groupStyle, flex: 2 }}>
+                    <label style={labelStyle}>SMTP Host</label>
+                    <input type="text" value={form.otp_smtp_host} onChange={set("otp_smtp_host")}
+                      placeholder="smtp.kalla.co.id" style={fieldStyle} />
+                  </div>
+                  <div style={{ ...groupStyle, flex: 1 }}>
+                    <label style={labelStyle}>Port</label>
+                    <input type="number" value={form.otp_smtp_port} onChange={set("otp_smtp_port")}
+                      placeholder="587" style={fieldStyle} />
+                  </div>
+                </div>
+                <div style={groupStyle}>
+                  <label style={labelStyle}>SMTP Username</label>
+                  <input type="text" value={form.otp_smtp_user} onChange={set("otp_smtp_user")}
+                    placeholder="username SMTP" style={fieldStyle} />
+                </div>
+                <div style={groupStyle}>
+                  <label style={labelStyle}>SMTP Password</label>
+                  <input type="password" value={form.otp_smtp_pass} onChange={set("otp_smtp_pass")}
+                    placeholder={settings?.otp_smtp_pass === "••••••••" ? "tersimpan (isi untuk ganti)" : "password SMTP"}
+                    style={fieldStyle} autoComplete="new-password" />
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={groupStyle}>
+                  <label style={labelStyle}>URL API WhatsApp</label>
+                  <input type="text" value={form.otp_wa_api_url} onChange={set("otp_wa_api_url")}
+                    placeholder="https://wabo.kallagroup.co.id/send" style={fieldStyle} />
+                </div>
+                <div style={groupStyle}>
+                  <label style={labelStyle}>API Key WhatsApp</label>
+                  <input type="password" value={form.otp_wa_api_key} onChange={set("otp_wa_api_key")}
+                    placeholder={settings?.otp_wa_api_key === "••••••••" ? "tersimpan (isi untuk ganti)" : "X-API-KEY"}
+                    style={fieldStyle} autoComplete="new-password" />
+                </div>
+                <div style={groupStyle}>
+                  <label style={labelStyle}>Nomor pengirim</label>
+                  <input type="text" value={form.otp_wa_sender} onChange={set("otp_wa_sender")}
+                    placeholder="6281xxxxxxxxx" style={fieldStyle} />
+                </div>
+              </>
+            )}
+            <span style={{ fontSize: 11, color: LS.warn }}>
+              Konfigurasi disimpan. Pengiriman OTP otomatis akan diaktifkan pada update berikutnya.
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Stempel / Seal */}
+      <div style={sectionStyle}>
+        <SectionHead icon="checkCircle" tone={LS.bugisTeal} title="Stempel / Seal Perusahaan"
+          desc="Tempel stempel resmi pada dokumen final"
+          right={<div style={{ display: "flex", alignItems: "center", gap: 8 }}><SoonBadge /><Toggle on={isOn("stamp_enabled")} onChange={(v) => setVal("stamp_enabled", v ? "true" : "false")} /></div>}
+        />
+        {isOn("stamp_enabled") && (
+          <div style={groupStyle}>
+            <label style={labelStyle}>URL gambar stempel (PNG transparan)</label>
+            <input type="text" value={form.stamp_image_url} onChange={set("stamp_image_url")}
+              placeholder="https://.../stempel-pmd.png" style={fieldStyle} />
+            <span style={{ fontSize: 11, color: LS.warn, marginTop: 5 }}>
+              Konfigurasi disimpan. Penempelan stempel otomatis menyusul.
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Notifikasi Email */}
+      <div style={sectionStyle}>
+        <SectionHead icon="mail" tone={LS.brand} title="Notifikasi Email"
+          desc="Kirim email saat dokumen siap ditandatangani / selesai"
+          right={<div style={{ display: "flex", alignItems: "center", gap: 8 }}><SoonBadge /><Toggle on={isOn("notify_email_enabled")} onChange={(v) => setVal("notify_email_enabled", v ? "true" : "false")} /></div>}
+        />
+        {isOn("notify_email_enabled") && (
+          <span style={{ fontSize: 11, color: LS.mute }}>
+            Menggunakan konfigurasi SMTP dari bagian OTP (channel Email). Pengiriman otomatis menyusul.
+          </span>
+        )}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

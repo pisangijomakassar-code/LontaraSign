@@ -21,11 +21,33 @@ class PatchUserRequest(BaseModel):
 
 
 SETTING_DEFAULTS: Dict[str, str] = {
-    "max_docs_per_user": "3",
+    # Penyimpanan dokumen (rolling window) — WIRED
+    "keep_recent_docs": "10",
+    # LLM / AI Review
     "llm_provider": "",
     "llm_model": "",
     "llm_api_key": "",
+    # OTP saat tanda tangan — config tersimpan, eksekusi menyusul
+    "otp_enabled": "false",
+    "otp_channel": "email",          # email | whatsapp
+    "otp_email_from": "",
+    "otp_smtp_host": "",
+    "otp_smtp_port": "587",
+    "otp_smtp_user": "",
+    "otp_smtp_pass": "",             # secret
+    "otp_wa_api_url": "",
+    "otp_wa_api_key": "",            # secret
+    "otp_wa_sender": "",
+    # Stempel / seal perusahaan — config tersimpan, eksekusi menyusul
+    "stamp_enabled": "false",
+    "stamp_image_url": "",
+    # Notifikasi email — config tersimpan, eksekusi menyusul
+    "notify_email_enabled": "false",
 }
+
+# Key yang nilainya rahasia — di-mask saat GET, di-skip saat PATCH jika tak diubah
+SECRET_KEYS = {"llm_api_key", "otp_smtp_pass", "otp_wa_api_key"}
+MASK = "••••••••"
 
 router = APIRouter()
 
@@ -205,8 +227,9 @@ def admin_get_settings(
     rows = {r.key: r.value for r in db.scalars(select(AppSetting)).all()}
     result = {}
     for k, default in SETTING_DEFAULTS.items():
-        val = rows.get(k, default) or default
-        result[k] = "••••••••" if k == "llm_api_key" and val else val
+        val = rows.get(k, default)
+        val = default if val is None else val
+        result[k] = MASK if (k in SECRET_KEYS and val) else val
     return success_response("Pengaturan sistem", result)
 
 
@@ -219,8 +242,8 @@ def admin_patch_settings(
     for k, v in payload.items():
         if k not in SETTING_DEFAULTS:
             continue
-        if k == "llm_api_key" and v == "••••••••":
-            continue
+        if k in SECRET_KEYS and v == MASK:
+            continue  # nilai rahasia tak diubah
         row = db.scalar(select(AppSetting).where(AppSetting.key == k))
         if row:
             row.value = str(v) if v is not None else ""
