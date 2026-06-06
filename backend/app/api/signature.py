@@ -121,10 +121,13 @@ def finalize_sign(
         ACTION_LABEL = {
             "upload": "Diunggah",
             "review": "Direview AI",
+            "ai_review": "Direview AI",
             "reviewed_by_ai": "Direview AI",
+            "needs_revision": "Perlu Revisi",
             "approve": "Disetujui",
             "request_sign": "Diminta Tanda Tangan",
             "signed": "Ditandatangani",
+            "share": "Dibagikan",
         }
         logs = db.scalars(
             select(DocumentLog)
