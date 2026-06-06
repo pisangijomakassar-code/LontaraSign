@@ -105,6 +105,12 @@ export default function LoginPage() {
             </Link>
           </div>
 
+          <div style={{ marginTop: 8, textAlign: "center", fontSize: 12 }}>
+            <Link to="/keamanan" style={{ color: LS.mute, textDecoration: "none" }}>
+              Tentang &amp; Standar Keamanan
+            </Link>
+          </div>
+
           <div style={{
             marginTop: 16, padding: "12px 14px", background: LS.bugisGoldSoft,
             border: `1px solid ${LS.bugisGold}22`, borderRadius: 10, fontSize: 12,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { LS } from "../design/tokens";
 import { LontaraMark, Wordmark } from "../design/primitives";
 
@@ -136,6 +136,10 @@ export default function VerifyPage() {
 
               <div style={{ fontSize: 11, color: LS.mute, textAlign: "center", lineHeight: 1.7, padding: "0 8px" }}>
                 Verifikasi ini dilakukan oleh LontaraSign. Tanda tangan elektronik sah berdasarkan UU No. 11 Tahun 2008 tentang ITE Pasal 11.
+                <br />
+                <Link to="/keamanan" style={{ color: LS.brand, fontWeight: 600, textDecoration: "none" }}>
+                  Pelajari standar keamanan &amp; fitur →
+                </Link>
               </div>
             </div>
           )}
