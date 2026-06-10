@@ -19,3 +19,11 @@ export const approveDocument = (id, note) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ note }),
   });
+
+// feedback: map index-temuan → { status: "resolved"|"dismissed", reason }
+export const saveFindingsFeedback = (id, feedback) =>
+  apiRequest(`/documents/${id}/findings-feedback`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ feedback }),
+  });

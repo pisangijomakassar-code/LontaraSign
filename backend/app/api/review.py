@@ -8,10 +8,10 @@ from app.core.responses import error_response, success_response
 from app.models.document import Document
 from app.models.review import DocumentReview
 from app.models.user import User
-from app.schemas.review import ApproveRequest, MarkRevisionRequest
+from app.schemas.review import ApproveRequest, FindingsFeedbackRequest, MarkRevisionRequest
 from app.services.ai_review import review_document_text
 from app.services.log_service import log_action
-from app.services.pdf_service import extract_text_from_pdf
+from app.services.pdf_service import extract_text_from_pdf, render_review_images
 
 router = APIRouter()
 
@@ -39,7 +39,16 @@ async def trigger_review(
     except Exception:
         pass
 
-    result = await review_document_text(text, db=db)
+    # OCR Vision: render halaman penting jadi gambar agar AI bisa "melihat"
+    # tanda tangan/stempel/kop yang tidak muncul di teks. Gagal render tidak
+    # boleh memblokir review — fallback ke teks saja.
+    images = []
+    try:
+        images = render_review_images(doc.original_file_path, text)
+    except Exception:
+        images = []
+
+    result = await review_document_text(text, db=db, images=images)
 
     # Upsert review record — tahan race condition (mis. React StrictMode double-invoke).
     # Strategi: coba INSERT dulu, kalau IntegrityError (duplicate document_id),
@@ -98,6 +107,52 @@ def get_review_result(
     if not review:
         error_response(404, "Review belum tersedia untuk dokumen ini")
     return success_response("Hasil review", _review_dict(review))
+
+
+_VALID_FEEDBACK_STATUS = {"open", "resolved", "dismissed"}
+
+
+@router.put("/{doc_id}/findings-feedback")
+def save_findings_feedback(
+    doc_id: int,
+    payload: FindingsFeedbackRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Simpan status per-temuan: sudah diperbaiki / ditandai kurang tepat (false positive).
+
+    Disimpan sebagai map { "<index>": {"status": ..., "reason": ...} } pada review.
+    Dipakai frontend untuk membuka gate tanda tangan + audit trail + bahan tuning AI.
+    """
+    _get_owned_doc(doc_id, current_user.id, db)
+    review = db.scalar(select(DocumentReview).where(DocumentReview.document_id == doc_id))
+    if not review:
+        error_response(404, "Review belum tersedia untuk dokumen ini")
+
+    cleaned: dict = {}
+    for key, val in (payload.feedback or {}).items():
+        status = str(getattr(val, "status", "open") or "open").strip().lower()
+        if status not in _VALID_FEEDBACK_STATUS or status == "open":
+            continue
+        cleaned[str(key)] = {
+            "status": status,
+            "reason": str(getattr(val, "reason", "") or "")[:300],
+        }
+
+    review.findings_feedback_json = cleaned
+    db.commit()
+    db.refresh(review)
+
+    dismissed = sum(1 for v in cleaned.values() if v.get("status") == "dismissed")
+    resolved = sum(1 for v in cleaned.values() if v.get("status") == "resolved")
+    log_action(
+        db, doc_id, current_user.name, current_user.role, "findings_feedback",
+        actor_id=current_user.id,
+        description=f"Tindak lanjut temuan diperbarui: {resolved} diperbaiki, {dismissed} ditandai kurang tepat",
+        meta={"feedback": cleaned},
+    )
+
+    return success_response("Tindak lanjut temuan tersimpan", _review_dict(review))
 
 
 @router.post("/{doc_id}/mark-revision")
@@ -167,6 +222,7 @@ def _review_dict(r: DocumentReview) -> dict:
         "ai_points": r.ai_points_json,
         "ai_notes": r.ai_notes_json,
         "ai_recommendation": r.ai_recommendation,
+        "findings_feedback": r.findings_feedback_json or {},
         "reviewed_by_system": r.reviewed_by_system,
         "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
     }

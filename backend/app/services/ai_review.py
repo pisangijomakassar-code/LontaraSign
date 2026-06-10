@@ -38,8 +38,19 @@ WAJIB: Tiap item punya "evidence" dengan kutipan TEPAT dari dokumen (copy-paste,
 Temukan masalah NYATA dari teks. Minimal 3 item, maksimal 12 item."""
 
 
-def _build_prompt(text: str) -> str:
-    return _REVIEW_PROMPT_TEMPLATE.format(text=text[:8000])
+_VISION_NOTE = """
+CATATAN PENTING — KAMU JUGA DIBERI GAMBAR HALAMAN DOKUMEN:
+Selain teks, kamu menerima GAMBAR halaman dokumen. Gunakan gambar untuk hal yang TIDAK terlihat di teks:
+- Tanda tangan, paraf, dan stempel/cap biasanya berupa GAMBAR dan TIDAK muncul di hasil ekstraksi teks. JANGAN simpulkan "tidak ada tanda tangan/stempel" tanpa memeriksa gambar lebih dulu. Kalau di gambar terlihat ada coretan tanda tangan / cap basah, berarti tanda tangan ADA.
+- Nomor dokumen, tanggal, atau nilai yang tampak "terpotong" di teks (mis. berakhir dengan "-" atau "/") sering hanya tersambung ke baris berikutnya. Verifikasi lewat gambar sebelum menandainya tidak lengkap.
+- Periksa juga kop surat, tata letak, dan tabel yang mungkin tidak terbaca rapi sebagai teks.
+Prioritaskan apa yang benar-benar terlihat di gambar saat menilai keberadaan tanda tangan, stempel, dan kelengkapan field.
+"""
+
+
+def _build_prompt(text: str, has_images: bool = False) -> str:
+    base = _REVIEW_PROMPT_TEMPLATE.format(text=text[:8000])
+    return base + ("\n" + _VISION_NOTE if has_images else "")
 
 
 def _db_setting(db, key: str, default: str = "") -> str:
@@ -54,8 +65,10 @@ def _db_setting(db, key: str, default: str = "") -> str:
         return default
 
 
-async def review_document_text(text: str, db=None) -> dict:
-    if not text.strip():
+async def review_document_text(text: str, db=None, images: list[str] | None = None) -> dict:
+    images = images or []
+    # Tanpa teks DAN tanpa gambar → tidak ada yang bisa dianalisis.
+    if not text.strip() and not images:
         return {
             "summary": "Teks tidak dapat diekstrak dari dokumen ini. Dokumen mungkin berupa scan/image tanpa teks selectable.",
             "points": [
@@ -95,6 +108,18 @@ async def review_document_text(text: str, db=None) -> dict:
     }
     model = _db_setting(db, "llm_model") or os.getenv("AI_MODEL", "").strip() or default_models[provider]
 
+    # OCR Vision: kalau ada gambar halaman, pakai model yang mendukung vision.
+    # Default Gemini 2.5 Flash — murah & cukup baik untuk deteksi tanda tangan/stempel.
+    # Hanya jalur openrouter/openai yang mendukung multimodal di sini.
+    vision_enabled = (_db_setting(db, "llm_vision_enabled", "1") or "1").strip().lower() not in ("0", "false", "off", "no")
+    vision_model = (
+        _db_setting(db, "llm_vision_model")
+        or os.getenv("AI_VISION_MODEL", "").strip()
+        or "google/gemini-2.5-flash"
+    )
+    use_vision = bool(images) and vision_enabled and provider in ("openrouter", "openai")
+    model_used = vision_model if use_vision else model
+
     try:
         if provider in ("openrouter", "openai"):
             # OpenAI dan OpenRouter pakai format chat completions yang sama.
@@ -110,12 +135,25 @@ async def review_document_text(text: str, db=None) -> dict:
             if provider == "openrouter":
                 headers["HTTP-Referer"] = "https://lontarasign.local"
                 headers["X-Title"] = "LontaraSign"
+
+            if use_vision:
+                # Konten multimodal: teks prompt + gambar halaman (maks 4 untuk batasi biaya).
+                content = [{"type": "text", "text": _build_prompt(text, has_images=True)}]
+                for b64 in images[:4]:
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{b64}"},
+                    })
+                messages = [{"role": "user", "content": content}]
+            else:
+                messages = [{"role": "user", "content": _build_prompt(text)}]
+
             payload = {
-                "model": model,
+                "model": model_used,
                 "max_tokens": 4096,
-                "messages": [{"role": "user", "content": _build_prompt(text)}],
+                "messages": messages,
             }
-            async with httpx.AsyncClient(timeout=150) as ac:
+            async with httpx.AsyncClient(timeout=180) as ac:
                 resp = await ac.post(
                     f"{base_url}/chat/completions",
                     headers=headers, json=payload,
@@ -127,7 +165,7 @@ async def review_document_text(text: str, db=None) -> dict:
             raw = (msg.get("content") or msg.get("reasoning") or "").strip()
             if not raw:
                 raise RuntimeError(f"empty AI response: {str(body)[:300]}")
-            reviewed_by = f"LontaraAI Review v1.0 ({model})"
+            reviewed_by = f"LontaraAI Review v1.0 ({model_used}{' · vision' if use_vision else ''})"
         else:
             import anthropic
             client = anthropic.Anthropic(api_key=api_key)

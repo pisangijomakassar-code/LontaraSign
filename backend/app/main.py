@@ -67,6 +67,17 @@ def _migrate_add_org_columns(db):
         db.rollback()
 
 
+def _migrate_add_findings_feedback(db):
+    """Add findings_feedback_json column to document_reviews if missing (MySQL)."""
+    try:
+        db.execute(text(
+            "ALTER TABLE document_reviews ADD COLUMN findings_feedback_json JSON NULL"
+        ))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
 def _seed_default_org_and_backfill(db):
     """Ensure at least one organization exists and backfill null org_ids."""
     org = db.scalar(select(Organization).where(Organization.slug == "kalla-group"))
@@ -90,6 +101,7 @@ def on_startup():
     db = SessionLocal()
     try:
         _migrate_add_org_columns(db)
+        _migrate_add_findings_feedback(db)
         _seed_default_org_and_backfill(db)
     finally:
         db.close()

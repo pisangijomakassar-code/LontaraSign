@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { triggerReview, markRevision, approveDocument } from "../features/review/reviewApi";
+import { triggerReview, markRevision, approveDocument, saveFindingsFeedback } from "../features/review/reviewApi";
 import { getDocument } from "../features/documents/documentsApi";
 import { useAuthStore } from "../store/authStore";
 import { formatDate, getErrorMessage } from "../lib/utils";
@@ -47,8 +47,19 @@ function fallback(text, done) {
   document.body.removeChild(el);
 }
 
-function FindingCard({ f, i, expanded, resolved, active, onToggle, onResolve }) {
+// Alasan preset saat menandai temuan "kurang tepat" (false positive).
+const DISMISS_REASONS = [
+  "Tanda tangan/stempel sudah ada (berupa gambar)",
+  "Nomor/tanggal tersambung di baris lain",
+  "Tidak berlaku untuk dokumen ini",
+];
+
+const DISMISS_TONE = "#6B7280";
+
+function FindingCard({ f, i, expanded, resolved, dismissed, active, onToggle, onResolve, onDismiss, onUndismiss }) {
   const [copied, copy] = useCopy();
+  const [picking, setPicking] = useState(false);
+  const [customReason, setCustomReason] = useState("");
   const sev = getSev(f);
   const meta = SEV_META[sev];
   const title = typeof f === "string" ? f : (f.title || f.text || "—");
@@ -56,16 +67,28 @@ function FindingCard({ f, i, expanded, resolved, active, onToggle, onResolve }) 
   const category = typeof f === "string" ? "" : (f.category || "");
   const evidence = typeof f === "string" ? null : f.evidence;
   const cta = typeof f === "string" ? "" : (f.cta || "");
+  const isDismissed = !!dismissed;
+  const handled = resolved || isDismissed;
+
+  // Warna kartu: dismissed = abu-abu (diabaikan), resolved = hijau, default putih
+  const cardBg = isDismissed ? LS.surfaceMuted : resolved ? LS.okSoft : "#fff";
+  const cardBorder = active ? meta.tone : isDismissed ? LS.border : resolved ? "#A7F3D0" : LS.border;
+
+  const confirmDismiss = (reason) => {
+    onDismiss(reason);
+    setPicking(false);
+    setCustomReason("");
+  };
 
   return (
     <div
       className="ls-card-hover ls-point"
-      data-finding={f.id || i}
+      data-finding={f.id ?? i}
       style={{
-        background: resolved ? LS.okSoft : "#fff",
-        border: `1.5px solid ${active ? meta.tone : resolved ? "#A7F3D0" : LS.border}`,
+        background: cardBg,
+        border: `1.5px solid ${cardBorder}`,
         borderRadius: 12, overflow: "hidden",
-        opacity: resolved ? 0.75 : 1,
+        opacity: handled ? 0.78 : 1,
         "--i": i,
       }}
     >
@@ -75,9 +98,11 @@ function FindingCard({ f, i, expanded, resolved, active, onToggle, onResolve }) 
       }}>
         <div style={{ flexShrink: 0, marginTop: 1 }}>
           <div style={{
-            width: 28, height: 28, borderRadius: 8, background: meta.soft,
-            border: `1px solid ${meta.border}`,
+            width: 28, height: 28, borderRadius: 8,
+            background: isDismissed ? "#E5E7EB" : meta.soft,
+            border: `1px solid ${isDismissed ? "#D1D5DB" : meta.border}`,
             display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
+            filter: isDismissed ? "grayscale(1)" : "none",
           }}>
             {meta.dot}
           </div>
@@ -93,6 +118,15 @@ function FindingCard({ f, i, expanded, resolved, active, onToggle, onResolve }) 
             {category && (
               <span style={{ fontSize: 10, color: LS.mute, fontWeight: 500 }}>· {category}</span>
             )}
+            {isDismissed && (
+              <span style={{
+                fontSize: 10, fontWeight: 700, color: "#fff", letterSpacing: 0.5,
+                padding: "2px 6px", background: DISMISS_TONE, borderRadius: 4,
+                display: "inline-flex", alignItems: "center", gap: 3,
+              }}>
+                <Ic name="alert" size={10} color="#fff" /> DIABAIKAN
+              </span>
+            )}
             <span style={{
               fontSize: 10, color: LS.muteSoft, marginLeft: "auto", fontFamily: LS.fontMono,
             }}>
@@ -102,13 +136,18 @@ function FindingCard({ f, i, expanded, resolved, active, onToggle, onResolve }) 
           </div>
           <div style={{
             fontSize: 14, fontWeight: 600,
-            color: resolved ? LS.mute : LS.ink,
-            textDecoration: resolved ? "line-through" : "none",
+            color: handled ? LS.mute : LS.ink,
+            textDecoration: handled ? "line-through" : "none",
             lineHeight: 1.4,
           }}>
             {title}
           </div>
-          {!expanded && detail && detail !== title && (
+          {isDismissed && dismissed.reason && (
+            <div style={{ fontSize: 11, color: DISMISS_TONE, marginTop: 4, fontStyle: "italic" }}>
+              Alasan: {dismissed.reason}
+            </div>
+          )}
+          {!expanded && !isDismissed && detail && detail !== title && (
             <div style={{
               fontSize: 12, color: LS.mute, marginTop: 4, lineHeight: 1.5,
               overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box",
@@ -148,26 +187,86 @@ function FindingCard({ f, i, expanded, resolved, active, onToggle, onResolve }) 
               </div>
             </div>
           )}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Btn variant={resolved ? "outline" : "primary"} size="sm"
-                 icon={resolved ? "undo" : "check"}
-                 onClick={(e) => { e.stopPropagation(); onResolve(); }}>
-              {resolved ? "Batalkan tanda" : "Tandai sudah diperbaiki"}
-            </Btn>
-            {cta && <Btn variant="outline" size="sm" icon="edit">{cta}</Btn>}
-            <Btn variant="ghost" size="sm" icon={copied ? "check" : "copy"}
-                 onClick={(e) => {
-                   e.stopPropagation();
-                   const lines = [
-                     `[${(SEV_META[sev]?.label || sev).toUpperCase()}] ${category ? `(${category}) ` : ""}${title}`,
-                     detail && detail !== title ? detail : "",
-                     evidence?.quote ? `Kutipan: "${evidence.quote}"${evidence.page ? ` (hal. ${evidence.page})` : ""}` : "",
-                   ].filter(Boolean).join("\n");
-                   copy(lines);
-                 }}>
-              {copied ? "Tersalin!" : "Salin"}
-            </Btn>
-          </div>
+
+          {/* Picker alasan "kurang tepat" */}
+          {picking && !isDismissed ? (
+            <div style={{
+              border: `1px solid ${LS.border}`, borderRadius: 10, padding: 12,
+              background: LS.surfaceMuted,
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: LS.ink, marginBottom: 8 }}>
+                Kenapa temuan ini kurang tepat?
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {DISMISS_REASONS.map((r) => (
+                  <button key={r} onClick={(e) => { e.stopPropagation(); confirmDismiss(r); }}
+                    style={{
+                      textAlign: "left", padding: "8px 10px", borderRadius: 8,
+                      border: `1px solid ${LS.border}`, background: "#fff",
+                      fontSize: 12, color: LS.inkSoft, cursor: "pointer", fontFamily: LS.font,
+                    }}>
+                    {r}
+                  </button>
+                ))}
+                <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+                  <input
+                    value={customReason}
+                    onChange={(e) => setCustomReason(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="Alasan lain (opsional)…"
+                    style={{
+                      flex: 1, border: `1px solid ${LS.border}`, borderRadius: 8,
+                      padding: "8px 10px", fontSize: 12, fontFamily: LS.font, outline: "none",
+                    }}
+                  />
+                  <Btn variant="subtle" size="sm"
+                       onClick={(e) => { e.stopPropagation(); confirmDismiss(customReason.trim() || "Tidak relevan"); }}>
+                    Tandai
+                  </Btn>
+                  <Btn variant="ghost" size="sm"
+                       onClick={(e) => { e.stopPropagation(); setPicking(false); }}>
+                    Batal
+                  </Btn>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {isDismissed ? (
+                <Btn variant="outline" size="sm" icon="undo"
+                     onClick={(e) => { e.stopPropagation(); onUndismiss(); }}>
+                  Batalkan "kurang tepat"
+                </Btn>
+              ) : (
+                <>
+                  <Btn variant={resolved ? "outline" : "primary"} size="sm"
+                       icon={resolved ? "undo" : "check"}
+                       onClick={(e) => { e.stopPropagation(); onResolve(); }}>
+                    {resolved ? "Batalkan tanda" : "Tandai sudah diperbaiki"}
+                  </Btn>
+                  {!resolved && (
+                    <Btn variant="outline" size="sm" icon="alert"
+                         onClick={(e) => { e.stopPropagation(); setPicking(true); }}>
+                      Temuan kurang tepat
+                    </Btn>
+                  )}
+                  {cta && <Btn variant="ghost" size="sm" icon="edit">{cta}</Btn>}
+                </>
+              )}
+              <Btn variant="ghost" size="sm" icon={copied ? "check" : "copy"}
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     const lines = [
+                       `[${(SEV_META[sev]?.label || sev).toUpperCase()}] ${category ? `(${category}) ` : ""}${title}`,
+                       detail && detail !== title ? detail : "",
+                       evidence?.quote ? `Kutipan: "${evidence.quote}"${evidence.page ? ` (hal. ${evidence.page})` : ""}` : "",
+                     ].filter(Boolean).join("\n");
+                     copy(lines);
+                   }}>
+                {copied ? "Tersalin!" : "Salin"}
+              </Btn>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -195,6 +294,7 @@ export default function ReviewPage() {
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState({});
   const [resolved, setResolved] = useState({});
+  const [dismissed, setDismissed] = useState({}); // id → { reason }
   const [activeId, setActiveId] = useState(null);
 
   if (!isAuthenticated) { navigate("/login"); return null; }
@@ -207,6 +307,7 @@ export default function ReviewPage() {
       const res = await getDocument(id);
       setDoc(res.data);
       setReview(res.data.review);
+      seedFeedback(res.data.review);
       const needsReview = !res.data.review && ["draft_uploaded", "needs_revision"].includes(res.data.status);
       if (needsReview) await doReview();
       else if (res.data.review) setRevealedCount(999); // already loaded, show all
@@ -215,6 +316,59 @@ export default function ReviewPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Seed status resolved/dismissed dari feedback yang sudah tersimpan di server
+  const seedFeedback = (rev) => {
+    const fb = rev?.findings_feedback || {};
+    const res = {}, dis = {};
+    Object.entries(fb).forEach(([key, v]) => {
+      const idx = Number(key);
+      if (v?.status === "resolved") res[idx] = true;
+      else if (v?.status === "dismissed") dis[idx] = { reason: v.reason || "" };
+    });
+    setResolved(res);
+    setDismissed(dis);
+  };
+
+  // Kirim seluruh map feedback ke server (fire-and-forget, error non-blocking)
+  const persistFeedback = (resMap, disMap) => {
+    const feedback = {};
+    Object.keys(resMap).forEach((k) => { if (resMap[k]) feedback[k] = { status: "resolved", reason: "" }; });
+    Object.keys(disMap).forEach((k) => { if (disMap[k]) feedback[k] = { status: "dismissed", reason: disMap[k].reason || "" }; });
+    saveFindingsFeedback(id, feedback).catch(() => {});
+  };
+
+  const toggleResolve = (fid) => {
+    setResolved((r) => {
+      const next = { ...r, [fid]: !r[fid] };
+      // resolve & dismiss mutually exclusive
+      const nextDis = { ...dismissed };
+      if (next[fid]) delete nextDis[fid];
+      setDismissed(nextDis);
+      persistFeedback(next, nextDis);
+      return next;
+    });
+  };
+
+  const dismissFinding = (fid, reason) => {
+    setDismissed((d) => {
+      const nextDis = { ...d, [fid]: { reason } };
+      const nextRes = { ...resolved };
+      delete nextRes[fid];
+      setResolved(nextRes);
+      persistFeedback(nextRes, nextDis);
+      return nextDis;
+    });
+  };
+
+  const undismissFinding = (fid) => {
+    setDismissed((d) => {
+      const nextDis = { ...d };
+      delete nextDis[fid];
+      persistFeedback(resolved, nextDis);
+      return nextDis;
+    });
   };
 
   const doReview = async () => {
@@ -284,10 +438,13 @@ export default function ReviewPage() {
     return base.slice(0, streaming ? revealedCount : base.length);
   }, [items, filter, streaming, revealedCount]);
 
-  const resolvedCount = Object.values(resolved).filter(Boolean).length;
+  const isHandled = (fid) => !!resolved[fid] || !!dismissed[fid];
+  const resolvedCount = items.filter((f) => resolved[f.id]).length;
+  const dismissedCount = items.filter((f) => dismissed[f.id]).length;
+  const handledCount = items.filter((f) => isHandled(f.id)).length;
   const criticalItems = items.filter((f) => getSev(f) === "critical");
-  const criticalResolved = criticalItems.filter((f) => resolved[f.id]).length;
-  const canSign = stats.critical === 0 || criticalResolved === stats.critical;
+  const criticalCleared = criticalItems.filter((f) => isHandled(f.id)).length;
+  const canSign = stats.critical === 0 || criticalCleared === stats.critical;
 
   const filters = [
     { k: "all", label: "Semua", count: stats.total, tone: LS.ink },
@@ -332,6 +489,7 @@ export default function ReviewPage() {
     approved: 2, pending_sign: 2, signed: 4,
   }[doc?.status] ?? 1;
 
+  const visionUsed = (review?.reviewed_by_system || "").toLowerCase().includes("vision");
   const worstLevel = stats.critical > 0 ? "critical" : stats.warning > 0 ? "warning" : "minor";
   const verdictBg = {
     critical: "linear-gradient(135deg, #FEF2F2 0%, #FFF7ED 100%)",
@@ -384,6 +542,16 @@ export default function ReviewPage() {
                 textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6, marginBottom: 4,
               }}>
                 <AnimatedSparkle size={14} /> LontaraAI Review · verdict
+                {visionUsed && (
+                  <span title="Dianalisis dengan OCR Vision — AI ikut membaca gambar halaman (tanda tangan, stempel, kop)"
+                    style={{
+                      marginLeft: 4, padding: "2px 7px", borderRadius: 999,
+                      background: LS.ai, color: "#fff", fontSize: 9, fontWeight: 700,
+                      letterSpacing: 0.6, display: "inline-flex", alignItems: "center", gap: 3,
+                    }}>
+                    👁 OCR VISION
+                  </span>
+                )}
               </div>
               <div style={{
                 fontSize: 22, fontWeight: 700, color: SEV_META[worstLevel].tone,
@@ -458,11 +626,13 @@ export default function ReviewPage() {
             }}>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: LS.ink }}>
-                  Progres perbaikan: <span style={{ color: LS.brand }}>{resolvedCount}</span> dari {stats.total} temuan
+                  Tindak lanjut: <span style={{ color: LS.brand }}>{handledCount}</span> dari {stats.total} temuan
                 </div>
                 <div style={{ fontSize: 12, color: LS.mute, marginTop: 2 }}>
-                  Critical: {criticalResolved}/{stats.critical}
-                  {canSign ? " ✓ siap untuk ditandatangani" : " — selesaikan dulu untuk bisa sign"}
+                  {resolvedCount} diperbaiki
+                  {dismissedCount > 0 ? ` · ${dismissedCount} ditandai kurang tepat` : ""}
+                  {" · "}Critical: {criticalCleared}/{stats.critical}
+                  {canSign ? " ✓ siap untuk ditandatangani" : " — tangani dulu untuk bisa sign"}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -477,13 +647,13 @@ export default function ReviewPage() {
                     ? "Memproses..."
                     : canSign
                       ? "Setujui & Tanda Tangani"
-                      : `Perbaiki ${stats.critical - criticalResolved} critical dulu`}
+                      : `Tangani ${stats.critical - criticalCleared} critical dulu`}
                 </Btn>
               </div>
             </div>
             <div style={{ height: 6, background: LS.surfaceMuted, borderRadius: 3, overflow: "hidden" }}>
               <div style={{
-                width: `${stats.total > 0 ? (resolvedCount / stats.total) * 100 : 0}%`,
+                width: `${stats.total > 0 ? (handledCount / stats.total) * 100 : 0}%`,
                 height: "100%",
                 background: `linear-gradient(90deg, ${LS.brand}, ${LS.ok})`,
                 transition: "width .35s cubic-bezier(.2,.7,.2,1)",
@@ -532,18 +702,24 @@ export default function ReviewPage() {
           </div>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {filtered.map((f, i) => (
-            <FindingCard key={f.id ?? i} f={f} i={i}
-              expanded={!!expanded[f.id ?? i]}
-              resolved={!!resolved[f.id ?? i]}
-              active={activeId === (f.id ?? i)}
-              onToggle={() => {
-                setExpanded((e) => ({ ...e, [f.id ?? i]: !e[f.id ?? i] }));
-                setActiveId(f.id ?? i);
-              }}
-              onResolve={() => setResolved((r) => ({ ...r, [f.id ?? i]: !r[f.id ?? i] }))}
-            />
-          ))}
+          {filtered.map((f, i) => {
+            const fid = f.id ?? i;
+            return (
+              <FindingCard key={fid} f={f} i={i}
+                expanded={!!expanded[fid]}
+                resolved={!!resolved[fid]}
+                dismissed={dismissed[fid] || null}
+                active={activeId === fid}
+                onToggle={() => {
+                  setExpanded((e) => ({ ...e, [fid]: !e[fid] }));
+                  setActiveId(fid);
+                }}
+                onResolve={() => toggleResolve(fid)}
+                onDismiss={(reason) => dismissFinding(fid, reason)}
+                onUndismiss={() => undismissFinding(fid)}
+              />
+            );
+          })}
           {streaming && filtered.length < items.length && (
             <div style={{ padding: 14, textAlign: "center", color: LS.ai, fontSize: 13 }}>
               <AnimatedSparkle size={14} color={LS.ai} /> streaming temuan...
@@ -577,7 +753,9 @@ export default function ReviewPage() {
             display: "flex", gap: 8, alignItems: "center",
           }}>
             <LontaraTag size={14} color={LS.ai} />
-            AI review adalah analisis awal otomatis — bukan keputusan final. Validasi oleh penyetuju tetap diperlukan.
+            {visionUsed
+              ? "AI review didukung OCR Vision (ikut membaca gambar halaman: tanda tangan, stempel, kop) — tetap analisis awal otomatis, bukan keputusan final. Validasi oleh penyetuju tetap diperlukan."
+              : "AI review adalah analisis awal otomatis — bukan keputusan final. Validasi oleh penyetuju tetap diperlukan."}
           </div>
         )}
       </div>
@@ -628,8 +806,9 @@ export default function ReviewPage() {
           <div style={{ fontSize: 40, marginBottom: 6 }}>🚫</div>
           <p style={{ fontSize: 13, color: LS.inkSoft, lineHeight: 1.55, margin: 0 }}>
             Masih ada <b style={{ color: LS.danger }}>
-              {stats.critical - criticalResolved} temuan critical
-            </b> yang harus diperbaiki (atau ditandai "sudah diperbaiki") sebelum dokumen bisa
+              {stats.critical - criticalCleared} temuan critical
+            </b> yang harus ditangani — tandai <b>"sudah diperbaiki"</b> kalau sudah dibetulkan,
+            atau <b>"temuan kurang tepat"</b> kalau itu alarm palsu — sebelum dokumen bisa
             disetujui dan ditandatangani.
           </p>
         </div>

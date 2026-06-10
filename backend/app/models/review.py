@@ -17,5 +17,9 @@ class DocumentReview(Base):
     ai_points_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     ai_notes_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     ai_recommendation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Feedback per-temuan dari penyetuju: map index-temuan → {status, reason}.
+    # status: "resolved" (sudah diperbaiki) | "dismissed" (temuan kurang tepat / false positive).
+    # Dipakai untuk membuka gate tanda tangan + audit trail + bahan tuning AI.
+    findings_feedback_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     reviewed_by_system: Mapped[str] = mapped_column(String(150), default="LontaraAI Review v0.1")
     reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())

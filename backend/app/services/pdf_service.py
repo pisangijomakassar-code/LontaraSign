@@ -1,3 +1,5 @@
+import base64
+
 import fitz  # PyMuPDF
 
 
@@ -41,6 +43,50 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     text = "".join(page.get_text() for page in doc)
     doc.close()
     return text.strip()
+
+
+def render_review_images(pdf_path: str, text: str = "", max_pages: int = 3, zoom: float = 1.0) -> list[str]:
+    """Render halaman penting dokumen jadi PNG base64 untuk AI vision review.
+
+    Strategi pemilihan halaman (hemat biaya token gambar):
+    - Dokumen digital normal → cukup halaman PERTAMA (kop/nomor/pihak) + TERAKHIR
+      (tempat tanda tangan/stempel biasanya berada).
+    - Dokumen hasil scan (teks sangat sedikit per halaman) → ambil beberapa
+      halaman awal karena teks tidak bisa diandalkan sama sekali.
+
+    Tanda tangan, paraf, dan stempel umumnya berupa GAMBAR — tidak muncul di
+    hasil ekstraksi teks — sehingga halaman gambar wajib disertakan agar AI tidak
+    salah menyimpulkan "tidak ada tanda tangan".
+
+    Return: list string base64 PNG (tanpa prefix `data:`). Kosong bila gagal.
+    """
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception:
+        return []
+    try:
+        total = len(doc)
+        if total == 0:
+            return []
+        chars_per_page = (len(text) / total) if total else 0
+        is_scan = chars_per_page < 80  # teks sangat tipis → kemungkinan besar scan/gambar
+
+        if is_scan:
+            idxs = list(range(min(total, max_pages)))
+        else:
+            # halaman pertama + terakhir (dedupe untuk dokumen 1 halaman)
+            idxs = sorted({0, total - 1})
+
+        mat = fitz.Matrix(zoom, zoom)
+        out: list[str] = []
+        for i in idxs:
+            pix = doc[i].get_pixmap(matrix=mat, alpha=False)
+            out.append(base64.b64encode(pix.tobytes("png")).decode("ascii"))
+        return out
+    except Exception:
+        return []
+    finally:
+        doc.close()
 
 
 def embed_signature_to_pdf(

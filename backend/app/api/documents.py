@@ -195,6 +195,7 @@ def _review_dict(r: DocumentReview) -> dict:
         "ai_points": r.ai_points_json,
         "ai_notes": r.ai_notes_json,
         "ai_recommendation": r.ai_recommendation,
+        "findings_feedback": r.findings_feedback_json or {},
         "reviewed_by_system": r.reviewed_by_system,
         "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
     }
