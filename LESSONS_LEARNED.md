@@ -95,3 +95,17 @@ Dokumentasi otomatis masalah teknis dan solusinya.
 **Root Cause:** API PyMuPDF: radius = fraksi dari sisi terpendek (0.0-1.0); TextWriter.fill_textbox tidak terima color (set saat write_text); tidak bisa save non-incremental ke path sumber.
 **Fix:** radius=0.01; pakai insert_text biasa untuk teks; save ke `path.tmp` lalu `shutil.move`.
 **Tags:** #pymupdf #pdf #python
+
+## [2026-06-10] Issue: AI review false-positive "tidak ada tanda tangan" pada dokumen scan/TTD
+**Context:** User upload BAST-TTD.pdf (sudah ditandatangani), AI review flag 2 critical palsu: "Tanda tangan tidak ada" & "Nomor dokumen terpotong (058/HK-)".
+**Problem:** AI review menyimpulkan TTD tidak ada padahal ada; nomor dokumen 2-baris dikira terpotong.
+**Root Cause:** `pdf_service.extract_text_from_pdf` pakai `page.get_text()` (teks polos). TTD/stempel itu GAMBAR → tak muncul di teks → AI kira kosong. Nomor yang wrap ke baris berikut dipisah newline → AI kira terpotong. LLM cuma diberi teks, buta terhadap visual.
+**Fix:** OCR Vision hybrid — `render_review_images()` render halaman penting (pertama+terakhir, lebih utk scan) jadi PNG base64; `review_document_text` kirim teks+gambar multimodal ke Gemini 2.5 Flash (`google/gemini-2.5-flash` via OpenRouter, default saat ada gambar walau AI_MODEL=gpt-oss-120b text-only); prompt baru tegaskan TTD/stempel = gambar, cek dulu. Marker `· vision` di reviewed_by. Plus fitur "Temuan kurang tepat" (dismiss false-positive, simpan ke kolom `findings_feedback_json`) sebagai jaring pengaman. Verified doc 29: reviewed_by=`gemini-2.5-flash · vision`, AI eksplisit sebut "Berdasarkan gambar...".
+**Tags:** #lontarasign #ai #ocr #vision #openrouter #gemini #pymupdf
+
+## [2026-06-10] Issue: Setelah deploy frontend, user masih lihat UI lama (bundle JS stale)
+**Context:** Deploy bundle baru sukses (server serve index-Daz_E_Qu.js berisi kode baru), tapi browser masih muat index-CkJ4EWxo.js lama → badge OCR Vision tak muncul.
+**Problem:** Browser muat index.html lama dari HTTP cache → referensi ke bundle JS lama (hash beda dari yang di server).
+**Root Cause:** nginx serve index.html dengan cache default (tanpa no-cache). SPA/PWA: index.html WAJIB selalu di-revalidate supaya client ambil hash bundle terbaru tiap deploy. Tanpa itu returning user lihat versi lama sampai cache kedaluwarsa.
+**Fix:** Sementara: cache-bust query (`?cb=771`) atau Ctrl+Shift+R. Permanen (belum diterapkan): set `Cache-Control: no-cache` untuk index.html di nginx Dockerfile.prod frontend (hashed assets boleh long-cache, index.html jangan).
+**Tags:** #lontarasign #nginx #pwa #cache #deploy #spa
